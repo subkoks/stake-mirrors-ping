@@ -1,0 +1,78 @@
+# Stake Mirrors Ping Configuration
+
+mirrors:
+  - domain: stake.ac
+    url: https://stake.ac
+  - domain: stake.games
+    url: https://stake.games
+  - domain: stake.bet
+    url: https://stake.bet
+  - domain: stake.pet
+    url: https://stake.pet
+  - domain: stake1001.com
+    url: https://stake1001.com
+  - domain: stake1002.com
+    url: https://stake1002.com
+  - domain: stake1003.com
+    url: https://stake1003.com
+  - domain: stake1017.com
+    url: https://stake1017.com
+  - domain: stake1022.com
+    url: https://stake1022.com
+  - domain: stake.mba
+    url: https://stake.mba
+  - domain: stake.jp
+    url: https://stake.jp
+  - domain: stake.bz
+    url: https://stake.bz
+  - domain: staketr.com
+    url: https://staketr.com
+  - domain: stake.ceo
+    url: https://stake.ceo
+  - domain: stake.krd
+    url: https://stake.krd
+  - domain: stake1039.com
+    url: https://stake1039.com
+
+settings:
+  ping_rounds: 3
+  timeout_seconds: 10
+  concurrent_limit: 16
+  user_region: "UK"
+
+nordvpn:
+  api_url: "https://api.nordvpn.com/v1/servers"
+  target_regions:
+    - "Germany"
+    - "France"
+    - "Sweden"
+    - "Switzerland"
+    - "Finland"
+    - "Denmark"
+    - "Norway"
+    - "Belgium"
+    - "Austria"
+    - "Czech Republic"
+    - "Poland"
+    - "Romania"
+    - "Ireland"
+    - "Luxembourg"
+    - "Estonia"
+    - "Latvia"
+    - "Lithuania"
+    - "Bulgaria"
+    - "Croatia"
+    - "Cyprus"
+    - "Greece"
+    - "Hungary"
+    - "Iceland"
+    - "Malta"
+    - "Portugal"
+    - "Slovakia"
+    - "Slovenia"
+    - "Spain"
+    - "Italy"
+
+geoip:
+  provider: "ip-api"
+  api_url: "http://ip-api.com/json/"
