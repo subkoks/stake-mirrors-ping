@@ -5,6 +5,7 @@ from typing import Optional
 
 import aiohttp
 import websockets
+from curl_cffi import requests as cffi_requests
 
 from rich.console import Console
 
@@ -47,16 +48,33 @@ mutation MinesBet($amount: Float!, $currency: CurrencyEnum!) {
 """
 
 
+def _cffi_post(
+    url: str,
+    payload: str,
+    headers: dict,
+    cookies: dict,
+    timeout: float = 10.0,
+) -> tuple[int, Optional[dict]]:
+    """Synchronous curl_cffi POST with Chrome TLS fingerprint."""
+    try:
+        r = cffi_requests.post(
+            url, data=payload, headers=headers, cookies=cookies,
+            impersonate="chrome", timeout=timeout,
+        )
+        return r.status_code, r.json() if r.status_code == 200 else None
+    except Exception:
+        return 0, None
+
+
 async def api_latency_test(
     mirror: MirrorConfig,
     session_token: str,
     rounds: int = 3,
     timeout: float = 10.0,
 ) -> Optional[float]:
-    """Test API latency by making authenticated GraphQL requests."""
+    """Test API latency via curl_cffi (Chrome TLS fingerprint bypasses Cloudflare)."""
     url = f"{mirror.url}{GRAPHQL_PATH}"
     headers = {
-        **BROWSER_HEADERS,
         "x-access-token": session_token,
         "Content-Type": "application/json",
         "Origin": mirror.url,
@@ -66,25 +84,15 @@ async def api_latency_test(
     payload = json.dumps({"query": BALANCE_QUERY})
 
     times = []
-    async with aiohttp.ClientSession(cookies=cookies) as session:
-        for _ in range(rounds):
-            try:
-                start = time.perf_counter()
-                async with session.post(
-                    url,
-                    data=payload,
-                    headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=timeout),
-                    ssl=True,
-                ) as resp:
-                    elapsed = (time.perf_counter() - start) * 1000
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if "errors" not in data:
-                            times.append(round(elapsed, 2))
-            except Exception:
-                pass
-            await asyncio.sleep(0.2)
+    for _ in range(rounds):
+        start = time.perf_counter()
+        status, data = await asyncio.to_thread(
+            _cffi_post, url, payload, headers, cookies, timeout
+        )
+        elapsed = (time.perf_counter() - start) * 1000
+        if status == 200 and data and "errors" not in data:
+            times.append(round(elapsed, 2))
+        await asyncio.sleep(0.1)
 
     return round(sum(times) / len(times), 2) if times else None
 
@@ -138,7 +146,6 @@ async def bet_latency_test(
     """
     url = f"{mirror.url}{GRAPHQL_PATH}"
     headers = {
-        **BROWSER_HEADERS,
         "x-access-token": session_token,
         "Content-Type": "application/json",
         "Origin": mirror.url,
@@ -153,24 +160,34 @@ async def bet_latency_test(
         },
     })
 
-    try:
-        async with aiohttp.ClientSession(cookies=cookies) as session:
-            start = time.perf_counter()
-            async with session.post(
-                url,
-                data=payload,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=timeout),
-                ssl=True,
-            ) as resp:
-                elapsed = (time.perf_counter() - start) * 1000
-                if resp.status == 200:
-                    data = await resp.json()
-                    if "errors" not in data:
-                        return round(elapsed, 2)
-    except Exception:
-        pass
+    start = time.perf_counter()
+    status, data = await asyncio.to_thread(
+        _cffi_post, url, payload, headers, cookies, timeout
+    )
+    elapsed = (time.perf_counter() - start) * 1000
+    if status == 200 and data and "errors" not in data:
+        return round(elapsed, 2)
     return None
+
+
+async def _test_single_mirror(
+    result: PingResult,
+    session_token: str,
+    rounds: int,
+    run_bets: bool,
+    run_ws: bool,
+    sem: asyncio.Semaphore,
+) -> PingResult:
+    """Run all API tests for a single mirror behind a semaphore."""
+    async with sem:
+        result.api_latency_ms = await api_latency_test(
+            result.mirror, session_token, rounds=rounds
+        )
+        if run_ws:
+            result.ws_latency_ms = await ws_latency_test(result.mirror, session_token)
+        if run_bets:
+            result.bet_latency_ms = await bet_latency_test(result.mirror, session_token)
+        return result
 
 
 async def enrich_with_api_tests(
@@ -178,40 +195,44 @@ async def enrich_with_api_tests(
     session_token: str,
     rounds: int = 3,
     run_bets: bool = False,
+    concurrency: int = 4,
 ) -> list[PingResult]:
-    """Add API/WS/bet latency data to ping results."""
-    ws_warned = False
-    bet_warned = False
+    """Add API/WS/bet latency data to ping results (concurrent)."""
+    sem = asyncio.Semaphore(concurrency)
+    up_results = [r for r in results if r.is_up]
 
-    for result in results:
-        if not result.is_up:
-            continue
+    if not up_results:
+        return results
 
-        # API latency
-        result.api_latency_ms = await api_latency_test(
-            result.mirror, session_token, rounds=rounds
-        )
+    # Probe first mirror to detect WS/bet failures before mass-testing
+    probe = up_results[0]
+    probe.api_latency_ms = await api_latency_test(
+        probe.mirror, session_token, rounds=rounds
+    )
+    probe.ws_latency_ms = await ws_latency_test(probe.mirror, session_token)
+    ws_works = probe.ws_latency_ms is not None
+    if not ws_works:
+        console.print("[yellow]⚠ WebSocket test failed (Cloudflare blocks raw WS) — skipping WS[/]")
 
-        # WebSocket latency (skip all if first mirror fails — Cloudflare blocks raw WS)
-        if not ws_warned:
-            result.ws_latency_ms = await ws_latency_test(
-                result.mirror, session_token
+    bet_works = False
+    if run_bets:
+        probe.bet_latency_ms = await bet_latency_test(probe.mirror, session_token)
+        bet_works = probe.bet_latency_ms is not None
+        if not bet_works:
+            console.print("[yellow]⚠ Bet test failed (geo-blocked or mutation changed) — skipping bets[/]")
+
+    # Now run remaining mirrors concurrently, skipping broken tests
+    remaining = up_results[1:]
+    if remaining:
+        tasks = [
+            _test_single_mirror(
+                r, session_token, rounds,
+                run_bets=run_bets and bet_works,
+                run_ws=ws_works,
+                sem=sem,
             )
-            if result.ws_latency_ms is None:
-                console.print("[yellow]⚠ WebSocket test failed (Cloudflare blocks raw WS connections) — skipping WS for remaining mirrors[/]")
-                ws_warned = True
-
-        # Bet latency (only if explicitly enabled)
-        if run_bets and not bet_warned:
-            result.bet_latency_ms = await bet_latency_test(
-                result.mirror, session_token
-            )
-            if result.bet_latency_ms is None:
-                console.print("[yellow]⚠ Bet test failed (geo-blocked or mutation changed) — skipping bets for remaining mirrors[/]")
-                bet_warned = True
-        elif run_bets and bet_warned:
-            pass  # skip — already warned
-
-        await asyncio.sleep(0.3)
+            for r in remaining
+        ]
+        await asyncio.gather(*tasks)
 
     return results

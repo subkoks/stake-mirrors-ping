@@ -19,6 +19,8 @@ from .dns_resolver import enrich_with_geoip
 from .nordvpn import get_vpn_recommendations
 from .stake_api import enrich_with_api_tests
 from .reporter import print_results_table, print_vpn_recommendations, export_results
+from .dashboard import run_live_dashboard
+from .history import save_results, get_uptime_stats, get_scan_count
 
 console = Console()
 
@@ -52,6 +54,53 @@ async def run(args: argparse.Namespace) -> None:
     rounds = args.rounds or settings.get("ping_rounds", 3)
     timeout = args.timeout or settings.get("timeout_seconds", 10)
     concurrency = settings.get("concurrent_limit", 16)
+
+    session_token = os.getenv("STAKE_SESSION_TOKEN")
+
+    # --history: show stats and exit
+    if args.history:
+        from rich.table import Table
+        stats = get_uptime_stats()
+        if not stats:
+            console.print("[yellow]No history data yet. Run a scan first.[/]")
+            return
+        table = Table(title=f"Mirror Uptime Stats (last 24h) — {get_scan_count()} scans", show_lines=True)
+        table.add_column("Mirror", style="bold")
+        table.add_column("Uptime", justify="right")
+        table.add_column("Avg Best", justify="right")
+        table.add_column("Min Best", justify="right")
+        table.add_column("Max Best", justify="right")
+        table.add_column("Avg TCP", justify="right")
+        table.add_column("Avg API", justify="right")
+        table.add_column("Checks", justify="right", style="dim")
+        for domain, s in stats.items():
+            uptime_color = "green" if s["uptime_pct"] >= 99 else "yellow" if s["uptime_pct"] >= 90 else "red"
+            table.add_row(
+                domain,
+                f"[{uptime_color}]{s['uptime_pct']}%[/]",
+                f"{s['avg_best_ms'] or '—'}ms",
+                f"{s['min_best_ms'] or '—'}ms",
+                f"{s['max_best_ms'] or '—'}ms",
+                f"{s['avg_tcp_ms'] or '—'}ms",
+                f"{s['avg_api_ms'] or '—'}ms",
+                str(s["total_checks"]),
+            )
+        console.print(table)
+        return
+
+    # Live dashboard — skip one-shot flow entirely
+    if args.live:
+        await run_live_dashboard(
+            mirrors,
+            interval=args.live,
+            rounds=rounds,
+            timeout=timeout,
+            concurrency=concurrency,
+            skip_geoip=args.skip_geoip,
+            api=args.api,
+            session_token=session_token,
+        )
+        return
 
     console.print(Panel(
         f"[bold cyan]Stake Mirrors Ping[/]\n"
@@ -89,7 +138,6 @@ async def run(args: argparse.Namespace) -> None:
             progress.update(task, completed=True, description="[green]GeoIP complete!")
 
     # Step 3: Stake API tests (if token provided)
-    session_token = os.getenv("STAKE_SESSION_TOKEN")
     if args.api and session_token:
         with Progress(
             SpinnerColumn(),
@@ -107,6 +155,11 @@ async def run(args: argparse.Namespace) -> None:
             progress.update(task, completed=True, description="[green]API tests complete!")
     elif args.api and not session_token:
         console.print("[yellow]⚠ --api flag set but STAKE_SESSION_TOKEN not found in .env[/]")
+
+    # Save to history
+    if not args.no_history:
+        saved = save_results(results)
+        console.print(f"[dim]Saved {saved} results to history.db ({get_scan_count()} total scans)[/]")
 
     # Step 4: Print results
     print_results_table(results)
@@ -135,7 +188,7 @@ async def run(args: argparse.Namespace) -> None:
     if args.export:
         export_results(results, recommendations, fmt=args.export, output_dir=args.output_dir)
 
-    # Continuous mode
+    # Continuous mode (legacy)
     if args.watch:
         console.print(f"\n[dim]Refreshing every {args.watch} seconds... (Ctrl+C to stop)[/]")
         try:
@@ -180,7 +233,10 @@ Examples:
     parser.add_argument("--skip-vpn", action="store_true", help="Skip NordVPN recommendations")
     parser.add_argument("--export", choices=["json", "csv"], help="Export results to file")
     parser.add_argument("--output-dir", default="results", help="Output directory for exports")
-    parser.add_argument("--watch", type=int, metavar="SECONDS", help="Continuous monitoring interval")
+    parser.add_argument("--watch", type=int, metavar="SECONDS", help="Continuous monitoring (legacy, use --live)")
+    parser.add_argument("--live", type=int, metavar="SECONDS", help="Live dashboard with auto-refresh")
+    parser.add_argument("--no-history", action="store_true", help="Don't save results to history.db")
+    parser.add_argument("--history", action="store_true", help="Show uptime stats from history.db")
 
     args = parser.parse_args()
     asyncio.run(run(args))

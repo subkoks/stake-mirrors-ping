@@ -7,10 +7,11 @@ Find the fastest Stake.com mirror site + optimal NordVPN region for lowest laten
 - **16 Stake mirrors** tested concurrently (TCP + HTTPS + DNS)
 - **GeoIP lookup** — see where each mirror's server is located
 - **NordVPN recommendations** — best EU server city per mirror
-- **Stake API integration** — test real GraphQL/WebSocket/bet latency
+- **Stake API integration** — GraphQL latency via `curl_cffi` (Chrome TLS fingerprint bypasses Cloudflare)
+- **Live dashboard** — real-time auto-refreshing terminal UI with `rich.live`
+- **History tracking** — SQLite-based latency history with uptime stats
 - **Rich CLI** — color-coded sorted table, fastest on top
 - **Export** — save results to JSON or CSV
-- **Watch mode** — continuous monitoring with auto-refresh
 
 ## Quick Start
 
@@ -32,8 +33,14 @@ python -m src.main --api --benchmark-bets
 python -m src.main --export json
 python -m src.main --export csv
 
-# Watch mode (refresh every 60s)
-python -m src.main --watch 60
+# Live dashboard (refresh every 30s)
+python -m src.main --live 30
+
+# Live dashboard with API tests
+python -m src.main --live 30 --api --skip-vpn
+
+# View uptime history stats
+python -m src.main --history
 
 # Skip NordVPN / GeoIP
 python -m src.main --skip-vpn --skip-geoip
@@ -68,7 +75,10 @@ python -m src.main --rounds 5 --timeout 15
 | `--skip-vpn`        | Skip NordVPN recommendations              |
 | `--export json/csv` | Export results to file                    |
 | `--output-dir DIR`  | Output directory (default: results/)      |
-| `--watch SECONDS`   | Continuous monitoring interval            |
+| `--live SECONDS`    | Live dashboard with auto-refresh          |
+| `--watch SECONDS`   | Legacy continuous monitoring              |
+| `--history`         | Show uptime stats from history.db         |
+| `--no-history`      | Don't save results to history.db          |
 
 ## Output Example
 
@@ -93,7 +103,8 @@ Edit `config.yaml` to add/remove mirrors, change settings, or modify NordVPN tar
 ## Tech Stack
 
 - Python 3.12+ with asyncio
+- curl_cffi (Chrome TLS fingerprint — bypasses Cloudflare)
 - aiohttp + aiodns (async HTTP/DNS)
-- websockets (WS latency testing)
-- rich (beautiful CLI output)
+- rich (beautiful CLI output + live dashboard)
+- SQLite (history tracking)
 - PyYAML + python-dotenv (config)
