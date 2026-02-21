@@ -53,7 +53,6 @@ def print_results_table(results: list[PingResult], title: str = "Stake Mirror Pi
     table.add_column("TCP", justify="right")
     table.add_column("HTTPS", justify="right")
     table.add_column("API", justify="right")
-    table.add_column("WS", justify="right")
     table.add_column("Bet", justify="right")
     table.add_column("Best", justify="right", style="bold")
 
@@ -71,7 +70,6 @@ def print_results_table(results: list[PingResult], title: str = "Stake Mirror Pi
             f"[{latency_color(r.tcp_latency_ms)}]{fmt_ms(r.tcp_latency_ms)}[/]",
             f"[{latency_color(r.https_latency_ms)}]{fmt_ms(r.https_latency_ms)}[/]",
             f"[{latency_color(r.api_latency_ms)}]{fmt_ms(r.api_latency_ms)}[/]",
-            f"[{latency_color(r.ws_latency_ms)}]{fmt_ms(r.ws_latency_ms)}[/]",
             f"[{latency_color(r.bet_latency_ms)}]{fmt_ms(r.bet_latency_ms)}[/]",
             f"[{latency_color(r.best_latency_ms)}]{fmt_ms(r.best_latency_ms)}[/]",
         )
@@ -179,7 +177,6 @@ def export_results(
                 "tcp_ms": r.tcp_latency_ms,
                 "https_ms": r.https_latency_ms,
                 "api_ms": r.api_latency_ms,
-                "ws_ms": r.ws_latency_ms,
                 "bet_ms": r.bet_latency_ms,
                 "best_ms": r.best_latency_ms,
                 "ssl_valid": r.ssl_valid,
@@ -205,7 +202,7 @@ def export_results(
             writer = csv.writer(f)
             writer.writerow([
                 "Rank", "Domain", "URL", "Status", "IP", "Location",
-                "DNS_ms", "TCP_ms", "HTTPS_ms", "API_ms", "WS_ms", "Bet_ms",
+                "DNS_ms", "TCP_ms", "HTTPS_ms", "API_ms", "Bet_ms",
                 "Best_ms", "SSL", "Error",
             ])
             for i, r in enumerate(
@@ -216,7 +213,7 @@ def export_results(
                     "UP" if r.is_up else "DOWN",
                     r.ip_address, r.server_location,
                     r.dns_resolve_ms, r.tcp_latency_ms, r.https_latency_ms,
-                    r.api_latency_ms, r.ws_latency_ms, r.bet_latency_ms,
+                    r.api_latency_ms, r.bet_latency_ms,
                     r.best_latency_ms, r.ssl_valid, r.error,
                 ])
     else:

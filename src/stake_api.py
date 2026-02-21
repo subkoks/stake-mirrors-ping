@@ -3,8 +3,6 @@ import json
 import time
 from typing import Optional
 
-import aiohttp
-import websockets
 from curl_cffi import requests as cffi_requests
 
 from rich.console import Console
@@ -15,13 +13,6 @@ console = Console()
 
 
 GRAPHQL_PATH = "/_api/graphql"
-WS_PATH = "/_api/graphql"
-
-BROWSER_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Accept": "*/*",
-    "Accept-Language": "en-US,en;q=0.9",
-}
 
 # GraphQL query to check balance (lightweight, good for latency test)
 BALANCE_QUERY = """
@@ -97,43 +88,6 @@ async def api_latency_test(
     return round(sum(times) / len(times), 2) if times else None
 
 
-async def ws_latency_test(
-    mirror: MirrorConfig,
-    session_token: str,
-    timeout: float = 10.0,
-) -> Optional[float]:
-    """Test WebSocket connection + message latency.
-
-    Note: May fail due to Cloudflare blocking raw WebSocket upgrades.
-    """
-    ws_url = f"wss://{mirror.domain}{WS_PATH}"
-    headers = {
-        **BROWSER_HEADERS,
-        "x-access-token": session_token,
-        "Cookie": f"session={session_token}",
-    }
-
-    try:
-        start = time.perf_counter()
-        async with websockets.connect(
-            ws_url,
-            additional_headers=headers,
-            open_timeout=timeout,
-        ) as ws:
-            connect_time = (time.perf_counter() - start) * 1000
-
-            # Send connection_init for GraphQL WS protocol
-            init_msg = json.dumps({"type": "connection_init", "payload": {}})
-            start = time.perf_counter()
-            await ws.send(init_msg)
-            response = await asyncio.wait_for(ws.recv(), timeout=timeout)
-            msg_time = (time.perf_counter() - start) * 1000
-
-            return round((connect_time + msg_time) / 2, 2)
-    except Exception:
-        return None
-
-
 async def bet_latency_test(
     mirror: MirrorConfig,
     session_token: str,
@@ -175,16 +129,13 @@ async def _test_single_mirror(
     session_token: str,
     rounds: int,
     run_bets: bool,
-    run_ws: bool,
     sem: asyncio.Semaphore,
 ) -> PingResult:
-    """Run all API tests for a single mirror behind a semaphore."""
+    """Run API + bet tests for a single mirror behind a semaphore."""
     async with sem:
         result.api_latency_ms = await api_latency_test(
             result.mirror, session_token, rounds=rounds
         )
-        if run_ws:
-            result.ws_latency_ms = await ws_latency_test(result.mirror, session_token)
         if run_bets:
             result.bet_latency_ms = await bet_latency_test(result.mirror, session_token)
         return result
@@ -197,22 +148,18 @@ async def enrich_with_api_tests(
     run_bets: bool = False,
     concurrency: int = 4,
 ) -> list[PingResult]:
-    """Add API/WS/bet latency data to ping results (concurrent)."""
+    """Add API/bet latency data to ping results (concurrent)."""
     sem = asyncio.Semaphore(concurrency)
     up_results = [r for r in results if r.is_up]
 
     if not up_results:
         return results
 
-    # Probe first mirror to detect WS/bet failures before mass-testing
+    # Probe first mirror to detect bet failures before mass-testing
     probe = up_results[0]
     probe.api_latency_ms = await api_latency_test(
         probe.mirror, session_token, rounds=rounds
     )
-    probe.ws_latency_ms = await ws_latency_test(probe.mirror, session_token)
-    ws_works = probe.ws_latency_ms is not None
-    if not ws_works:
-        console.print("[yellow]⚠ WebSocket test failed (Cloudflare blocks raw WS) — skipping WS[/]")
 
     bet_works = False
     if run_bets:
@@ -221,14 +168,13 @@ async def enrich_with_api_tests(
         if not bet_works:
             console.print("[yellow]⚠ Bet test failed (geo-blocked or mutation changed) — skipping bets[/]")
 
-    # Now run remaining mirrors concurrently, skipping broken tests
+    # Run remaining mirrors concurrently
     remaining = up_results[1:]
     if remaining:
         tasks = [
             _test_single_mirror(
                 r, session_token, rounds,
                 run_bets=run_bets and bet_works,
-                run_ws=ws_works,
                 sem=sem,
             )
             for r in remaining

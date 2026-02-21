@@ -14,7 +14,6 @@ class PingResult:
     tcp_latency_ms: Optional[float] = None
     https_latency_ms: Optional[float] = None
     api_latency_ms: Optional[float] = None
-    ws_latency_ms: Optional[float] = None
     bet_latency_ms: Optional[float] = None
     dns_resolve_ms: Optional[float] = None
     ip_address: Optional[str] = None
@@ -41,7 +40,7 @@ class PingResult:
         latencies = [
             v for v in [
                 self.tcp_latency_ms, self.https_latency_ms,
-                self.api_latency_ms, self.ws_latency_ms
+                self.api_latency_ms
             ]
             if v is not None
         ]

@@ -60,7 +60,7 @@ def save_results(results: list[PingResult], db_path: str = DB_PATH) -> int:
             r.tcp_latency_ms,
             r.https_latency_ms,
             r.api_latency_ms,
-            r.ws_latency_ms,
+            None,  # ws_ms — deprecated, Stake has no WS endpoint
             r.bet_latency_ms,
             r.best_latency_ms,
             int(r.ssl_valid),
