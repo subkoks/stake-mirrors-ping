@@ -1,0 +1,17 @@
+# GitHub Sponsors configuration
+# Replace with your usernames or remove lines you don't need
+
+github: # subkoks # Uncomment and add your GitHub Sponsors username
+# patreon: # Add your Patreon username
+# open_collective: # Add your Open Collective username
+# ko_fi: # Add your Ko-fi username
+# tidelift: # Add your Tidelift package
+# community_bridge: # Add your Community Bridge project
+# liberapay: # Add your Liberapay username
+# issuehunt: # Add your IssueHunt username
+# otechie: # Add your Otechie username
+# lfx_crowdfunding: # Add your LFX Crowdfunding project
+# polar: # Add your Polar username
+# buy_me_a_coffee: # Add your Buy Me a Coffee username
+# thanks_dev: # Add your thanks.dev username
+custom: # Add custom funding links (e.g., PayPal, crypto wallets)

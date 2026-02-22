@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Question or Discussion
+    url: https://github.com/subkoks/stake-mirrors-ping/discussions
+    about: Ask questions or discuss ideas
+  - name: 📖 Documentation
+    url: https://github.com/subkoks/stake-mirrors-ping#readme
+    about: Check the README for usage instructions

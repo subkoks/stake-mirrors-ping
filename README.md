@@ -1,5 +1,11 @@
 # Stake Mirrors Ping 🏓
 
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![GitHub stars](https://img.shields.io/github/stars/subkoks/stake-mirrors-ping.svg?style=social&label=Star)](https://github.com/subkoks/stake-mirrors-ping)
+[![GitHub issues](https://img.shields.io/github/issues/subkoks/stake-mirrors-ping.svg)](https://github.com/subkoks/stake-mirrors-ping/issues)
+
 Find the fastest Stake.com mirror site + optimal NordVPN region for lowest latency.
 
 ## Features

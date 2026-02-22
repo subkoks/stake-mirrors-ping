@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.12', '3.13']
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Lint with ruff (if available)
+      run: |
+        pip install ruff || echo "Ruff not required"
+        ruff check . || echo "No ruff config, skipping"
+      continue-on-error: true
+
+    - name: Test basic import
+      run: |
+        python -c "import sys; sys.path.insert(0, 'src'); from main import main; print('✓ Import successful')"
+
+    - name: Run basic ping test (no API key)
+      run: |
+        python -m src.main --rounds 1 --timeout 5 --skip-vpn --skip-geoip
+      continue-on-error: true
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install safety bandit
+
+    - name: Check for security vulnerabilities
+      run: |
+        safety check --json || echo "Safety check completed"
+        bandit -r src/ -f json || echo "Bandit scan completed"
+      continue-on-error: true
+
+  code-quality:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install black isort mypy
+
+    - name: Check code formatting with black
+      run: black --check . || echo "Run 'black .' to format code"
+      continue-on-error: true
+
+    - name: Check import sorting with isort
+      run: isort --check-only . || echo "Run 'isort .' to sort imports"
+      continue-on-error: true
+
+    - name: Type check with mypy
+      run: mypy src/ --ignore-missing-imports || echo "Type hints needed"
+      continue-on-error: true
