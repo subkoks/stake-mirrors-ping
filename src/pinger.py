@@ -8,6 +8,7 @@ import aiohttp
 import certifi
 
 from .models import MirrorConfig, PingResult
+from .log import logger
 
 
 async def tcp_ping(host: str, port: int = 443, timeout: float = 10.0) -> Optional[float]:
@@ -22,7 +23,8 @@ async def tcp_ping(host: str, port: int = 443, timeout: float = 10.0) -> Optiona
         writer.close()
         await writer.wait_closed()
         return round(elapsed, 2)
-    except Exception:
+    except Exception as e:
+        logger.debug("tcp_ping failed for %s: %s", host, e)
         return None
 
 
@@ -46,7 +48,8 @@ async def https_ping(
             return round(elapsed, 2), resp.status, True
     except ssl.SSLError:
         return None, None, False
-    except Exception:
+    except Exception as e:
+        logger.debug("https_ping failed for %s: %s", url, e)
         return None, None, True
     finally:
         if own_session:
@@ -62,7 +65,8 @@ async def dns_resolve(domain: str) -> tuple[Optional[str], Optional[float]]:
         elapsed = (time.perf_counter() - start) * 1000
         ip = result[0][4][0] if result else None
         return ip, round(elapsed, 2)
-    except Exception:
+    except Exception as e:
+        logger.debug("dns_resolve failed for %s: %s", domain, e)
         return None, None
 
 
@@ -86,7 +90,7 @@ async def ping_mirror(
     # TCP ping (average over rounds)
     tcp_times = []
     for _ in range(rounds):
-        t = await tcp_ping(mirror.domain, timeout=timeout)
+        t = await tcp_ping(ip, timeout=timeout)
         if t is not None:
             tcp_times.append(t)
         await asyncio.sleep(0.1)

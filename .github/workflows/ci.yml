@@ -36,7 +36,7 @@ jobs:
 
     - name: Test basic import
       run: |
-        python -c "import sys; sys.path.insert(0, 'src'); from main import main; print('✓ Import successful')"
+        python -m src.main --help > /dev/null
 
     - name: Run basic ping test (no API key)
       run: |

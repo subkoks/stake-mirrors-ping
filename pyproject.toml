@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
 authors = [
-    {name = "blackterminal", email = ""}
+    {name = "blackterminal", email = "subkoks@gmail.com"}
 ]
 keywords = ["stake", "latency", "mirror", "vpn", "nordvpn", "ping", "benchmark"]
 classifiers = [
@@ -78,3 +78,11 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]

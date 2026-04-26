@@ -21,6 +21,7 @@ from .stake_api import enrich_with_api_tests
 from .reporter import print_results_table, print_vpn_recommendations, export_results
 from .dashboard import run_live_dashboard
 from .history import save_results, get_uptime_stats, get_scan_count
+from .log import setup_logging
 
 console = Console()
 
@@ -236,9 +237,11 @@ Examples:
     parser.add_argument("--watch", type=int, metavar="SECONDS", help="Continuous monitoring (legacy, use --live)")
     parser.add_argument("--live", type=int, metavar="SECONDS", help="Live dashboard with auto-refresh")
     parser.add_argument("--no-history", action="store_true", help="Don't save results to history.db")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable debug logging")
     parser.add_argument("--history", action="store_true", help="Show uptime stats from history.db")
 
     args = parser.parse_args()
+    setup_logging(verbose=getattr(args, "verbose", False))
     asyncio.run(run(args))
 
 
