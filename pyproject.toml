@@ -13,6 +13,15 @@ authors = [
     {name = "blackterminal", email = "subkoks@gmail.com"}
 ]
 keywords = ["stake", "latency", "mirror", "vpn", "nordvpn", "ping", "benchmark"]
+dependencies = [
+    "aiohttp>=3.9",
+    "certifi>=2024.0",
+    "curl-cffi>=0.7",
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
+    "requests>=2.31",
+    "rich>=13.0",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",

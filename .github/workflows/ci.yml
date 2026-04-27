@@ -35,8 +35,7 @@ jobs:
       continue-on-error: true
 
     - name: Test basic import
-      run: |
-        python -m src.main --help > /dev/null
+      run: python -m src.main --help
 
     - name: Run basic ping test (no API key)
       run: |
