@@ -23,4 +23,4 @@ requests==2.33.1
 rich==14.3.3
 urllib3==2.6.3
 curl_cffi==0.15.0
-yarl==1.22.0
+yarl==1.23.0
