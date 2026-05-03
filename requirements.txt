@@ -10,7 +10,7 @@ frozenlist==1.8.0
 geoip2==5.2.0
 idna==3.11
 markdown-it-py==4.0.0
-maxminddb==3.0.0
+maxminddb==3.1.1
 mdurl==0.1.2
 multidict==6.7.1
 propcache==0.4.1
