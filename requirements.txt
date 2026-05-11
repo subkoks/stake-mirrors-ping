@@ -20,7 +20,7 @@ Pygments==2.20.0
 python-dotenv==1.2.2
 PyYAML==6.0.3
 requests==2.33.1
-rich==14.3.3
+rich==15.0.0
 urllib3==2.7.0
 curl_cffi==0.15.0
 yarl==1.23.0
