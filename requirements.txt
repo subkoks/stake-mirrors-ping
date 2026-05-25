@@ -1,5 +1,5 @@
 aiodns==4.0.3
-aiohappyeyeballs==2.6.1
+aiohappyeyeballs==2.6.2
 aiohttp==3.13.5
 aiosignal==1.4.0
 attrs==26.1.0
