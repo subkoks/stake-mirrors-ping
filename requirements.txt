@@ -1,4 +1,4 @@
-aiodns==4.0.3
+aiodns==4.0.4
 aiohappyeyeballs==2.6.1
 aiohttp==3.13.5
 aiosignal==1.4.0
