@@ -6,6 +6,10 @@ from typing import Optional
 class MirrorConfig:
     domain: str
     url: str
+    # Whether this mirror is allowed to receive the authenticated Stake session
+    # token (x-access-token / session cookie). Defaults to False so a live
+    # real-money token is never broadcast to an unverified/squatted mirror.
+    trusted: bool = False
 
 
 @dataclass
@@ -30,7 +34,8 @@ class PingResult:
     @property
     def avg_latency_ms(self) -> Optional[float]:
         latencies = [
-            v for v in [self.tcp_latency_ms, self.https_latency_ms, self.api_latency_ms]
+            v
+            for v in [self.tcp_latency_ms, self.https_latency_ms, self.api_latency_ms]
             if v is not None
         ]
         return sum(latencies) / len(latencies) if latencies else None
@@ -38,10 +43,8 @@ class PingResult:
     @property
     def best_latency_ms(self) -> Optional[float]:
         latencies = [
-            v for v in [
-                self.tcp_latency_ms, self.https_latency_ms,
-                self.api_latency_ms
-            ]
+            v
+            for v in [self.tcp_latency_ms, self.https_latency_ms, self.api_latency_ms]
             if v is not None
         ]
         return min(latencies) if latencies else None
