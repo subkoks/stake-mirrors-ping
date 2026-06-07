@@ -11,7 +11,13 @@ import yaml
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    BarColumn,
+    TimeElapsedColumn,
+)
 
 from .models import MirrorConfig
 from .pinger import ping_all_mirrors
@@ -36,10 +42,33 @@ def load_config(config_path: str = "config.yaml") -> dict:
         return yaml.safe_load(f)
 
 
+def resolve_trusted_domains(config: dict) -> set[str]:
+    """Domains allowed to receive the authenticated session token.
+
+    Union of ``settings.trusted_api_domains`` in config and the
+    ``STAKE_TRUSTED_DOMAINS`` env var (comma-separated). Empty by default so
+    the live token is never sent anywhere the user has not explicitly verified.
+    """
+    settings = config.get("settings", {})
+    trusted: set[str] = {
+        str(d).strip().lower()
+        for d in settings.get("trusted_api_domains", [])
+        if str(d).strip()
+    }
+    env_value = os.getenv("STAKE_TRUSTED_DOMAINS", "")
+    trusted |= {d.strip().lower() for d in env_value.split(",") if d.strip()}
+    return trusted
+
+
 def parse_mirrors(config: dict) -> list[MirrorConfig]:
-    """Parse mirror list from config."""
+    """Parse mirror list from config, flagging trusted (token-eligible) hosts."""
+    trusted_domains = resolve_trusted_domains(config)
     return [
-        MirrorConfig(domain=m["domain"], url=m["url"])
+        MirrorConfig(
+            domain=m["domain"],
+            url=m["url"],
+            trusted=m["domain"].strip().lower() in trusted_domains,
+        )
         for m in config.get("mirrors", [])
     ]
 
@@ -61,11 +90,15 @@ async def run(args: argparse.Namespace) -> None:
     # --history: show stats and exit
     if args.history:
         from rich.table import Table
+
         stats = get_uptime_stats()
         if not stats:
             console.print("[yellow]No history data yet. Run a scan first.[/]")
             return
-        table = Table(title=f"Mirror Uptime Stats (last 24h) — {get_scan_count()} scans", show_lines=True)
+        table = Table(
+            title=f"Mirror Uptime Stats (last 24h) — {get_scan_count()} scans",
+            show_lines=True,
+        )
         table.add_column("Mirror", style="bold")
         table.add_column("Uptime", justify="right")
         table.add_column("Avg Best", justify="right")
@@ -75,7 +108,13 @@ async def run(args: argparse.Namespace) -> None:
         table.add_column("Avg API", justify="right")
         table.add_column("Checks", justify="right", style="dim")
         for domain, s in stats.items():
-            uptime_color = "green" if s["uptime_pct"] >= 99 else "yellow" if s["uptime_pct"] >= 90 else "red"
+            uptime_color = (
+                "green"
+                if s["uptime_pct"] >= 99
+                else "yellow"
+                if s["uptime_pct"] >= 90
+                else "red"
+            )
             table.add_row(
                 domain,
                 f"[{uptime_color}]{s['uptime_pct']}%[/]",
@@ -103,13 +142,15 @@ async def run(args: argparse.Namespace) -> None:
         )
         return
 
-    console.print(Panel(
-        f"[bold cyan]Stake Mirrors Ping[/]\n"
-        f"Mirrors: {len(mirrors)} | Rounds: {rounds} | Timeout: {timeout}s\n"
-        f"API Mode: {'[green]ON[/]' if args.api else '[dim]OFF[/]'} | "
-        f"Bet Test: {'[green]ON[/]' if args.benchmark_bets else '[dim]OFF[/]'}",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel(
+            f"[bold cyan]Stake Mirrors Ping[/]\n"
+            f"Mirrors: {len(mirrors)} | Rounds: {rounds} | Timeout: {timeout}s\n"
+            f"API Mode: {'[green]ON[/]' if args.api else '[dim]OFF[/]'} | "
+            f"Bet Test: {'[green]ON[/]' if args.benchmark_bets else '[dim]OFF[/]'}",
+            border_style="cyan",
+        )
+    )
 
     # Step 1: Ping all mirrors
     with Progress(
@@ -120,7 +161,9 @@ async def run(args: argparse.Namespace) -> None:
         console=console,
     ) as progress:
         task = progress.add_task("Pinging all mirrors...", total=None)
-        results = await ping_all_mirrors(mirrors, rounds=rounds, timeout=timeout, concurrency=concurrency)
+        results = await ping_all_mirrors(
+            mirrors, rounds=rounds, timeout=timeout, concurrency=concurrency
+        )
         progress.update(task, completed=True, description="[green]Pinging complete!")
 
     up_count = sum(1 for r in results if r.is_up)
@@ -153,14 +196,20 @@ async def run(args: argparse.Namespace) -> None:
                 rounds=rounds,
                 run_bets=args.benchmark_bets,
             )
-            progress.update(task, completed=True, description="[green]API tests complete!")
+            progress.update(
+                task, completed=True, description="[green]API tests complete!"
+            )
     elif args.api and not session_token:
-        console.print("[yellow]⚠ --api flag set but STAKE_SESSION_TOKEN not found in .env[/]")
+        console.print(
+            "[yellow]⚠ --api flag set but STAKE_SESSION_TOKEN not found in .env[/]"
+        )
 
     # Save to history
     if not args.no_history:
         saved = save_results(results)
-        console.print(f"[dim]Saved {saved} results to history.db ({get_scan_count()} total scans)[/]")
+        console.print(
+            f"[dim]Saved {saved} results to history.db ({get_scan_count()} total scans)[/]"
+        )
 
     # Step 4: Print results
     print_results_table(results)
@@ -176,8 +225,12 @@ async def run(args: argparse.Namespace) -> None:
                 console=console,
             ) as progress:
                 task = progress.add_task("Fetching NordVPN servers...", total=None)
-                recommendations = await get_vpn_recommendations(results, target_countries)
-                progress.update(task, completed=True, description="[green]VPN analysis complete!")
+                recommendations = await get_vpn_recommendations(
+                    results, target_countries
+                )
+                progress.update(
+                    task, completed=True, description="[green]VPN analysis complete!"
+                )
 
             print_vpn_recommendations(recommendations)
         else:
@@ -187,21 +240,32 @@ async def run(args: argparse.Namespace) -> None:
 
     # Step 6: Export
     if args.export:
-        export_results(results, recommendations, fmt=args.export, output_dir=args.output_dir)
+        export_results(
+            results, recommendations, fmt=args.export, output_dir=args.output_dir
+        )
 
     # Continuous mode (legacy)
     if args.watch:
-        console.print(f"\n[dim]Refreshing every {args.watch} seconds... (Ctrl+C to stop)[/]")
+        console.print(
+            f"\n[dim]Refreshing every {args.watch} seconds... (Ctrl+C to stop)[/]"
+        )
         try:
             while True:
                 await asyncio.sleep(args.watch)
                 console.clear()
-                results = await ping_all_mirrors(mirrors, rounds=rounds, timeout=timeout, concurrency=concurrency)
+                results = await ping_all_mirrors(
+                    mirrors, rounds=rounds, timeout=timeout, concurrency=concurrency
+                )
                 if not args.skip_geoip:
                     results = await enrich_with_geoip(results)
                 if args.api and session_token:
-                    results = await enrich_with_api_tests(results, session_token, rounds=rounds, run_bets=False)
-                print_results_table(results, title=f"Stake Mirror Ping — {__import__('datetime').datetime.now().strftime('%H:%M:%S')}")
+                    results = await enrich_with_api_tests(
+                        results, session_token, rounds=rounds, run_bets=False
+                    )
+                print_results_table(
+                    results,
+                    title=f"Stake Mirror Ping — {__import__('datetime').datetime.now().strftime('%H:%M:%S')}",
+                )
         except KeyboardInterrupt:
             console.print("\n[dim]Stopped.[/]")
 
@@ -226,19 +290,48 @@ Examples:
         """,
     )
     parser.add_argument("--config", default="config.yaml", help="Path to config file")
-    parser.add_argument("--rounds", type=int, help="Number of ping rounds (default: from config)")
-    parser.add_argument("--timeout", type=float, help="Timeout in seconds (default: from config)")
-    parser.add_argument("--api", action="store_true", help="Enable Stake API latency tests (requires STAKE_SESSION_TOKEN)")
-    parser.add_argument("--benchmark-bets", action="store_true", help="Enable $0 Dice bet latency test")
+    parser.add_argument(
+        "--rounds", type=int, help="Number of ping rounds (default: from config)"
+    )
+    parser.add_argument(
+        "--timeout", type=float, help="Timeout in seconds (default: from config)"
+    )
+    parser.add_argument(
+        "--api",
+        action="store_true",
+        help="Enable Stake API latency tests (requires STAKE_SESSION_TOKEN)",
+    )
+    parser.add_argument(
+        "--benchmark-bets", action="store_true", help="Enable $0 Dice bet latency test"
+    )
     parser.add_argument("--skip-geoip", action="store_true", help="Skip GeoIP lookups")
-    parser.add_argument("--skip-vpn", action="store_true", help="Skip NordVPN recommendations")
-    parser.add_argument("--export", choices=["json", "csv"], help="Export results to file")
-    parser.add_argument("--output-dir", default="results", help="Output directory for exports")
-    parser.add_argument("--watch", type=int, metavar="SECONDS", help="Continuous monitoring (legacy, use --live)")
-    parser.add_argument("--live", type=int, metavar="SECONDS", help="Live dashboard with auto-refresh")
-    parser.add_argument("--no-history", action="store_true", help="Don't save results to history.db")
-    parser.add_argument("-v", "--verbose", action="store_true", help="Enable debug logging")
-    parser.add_argument("--history", action="store_true", help="Show uptime stats from history.db")
+    parser.add_argument(
+        "--skip-vpn", action="store_true", help="Skip NordVPN recommendations"
+    )
+    parser.add_argument(
+        "--export", choices=["json", "csv"], help="Export results to file"
+    )
+    parser.add_argument(
+        "--output-dir", default="results", help="Output directory for exports"
+    )
+    parser.add_argument(
+        "--watch",
+        type=int,
+        metavar="SECONDS",
+        help="Continuous monitoring (legacy, use --live)",
+    )
+    parser.add_argument(
+        "--live", type=int, metavar="SECONDS", help="Live dashboard with auto-refresh"
+    )
+    parser.add_argument(
+        "--no-history", action="store_true", help="Don't save results to history.db"
+    )
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Enable debug logging"
+    )
+    parser.add_argument(
+        "--history", action="store_true", help="Show uptime stats from history.db"
+    )
 
     args = parser.parse_args()
     setup_logging(verbose=getattr(args, "verbose", False))

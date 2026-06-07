@@ -39,6 +39,13 @@ settings:
   timeout_seconds: 10
   concurrent_limit: 16
   user_region: "UK"
+  # SECURITY: domains allowed to receive the authenticated Stake session token
+  # (x-access-token / session cookie) during --api tests. Empty by default so a
+  # live real-money token is never broadcast to an unverified/lapsed/squatted
+  # mirror. Add ONLY domains you have personally verified are genuinely yours.
+  # Can also be set via the STAKE_TRUSTED_DOMAINS env var (comma-separated).
+  trusted_api_domains: []
+  #   - stake.com
 
 nordvpn:
   api_url: "https://api.nordvpn.com/v1/servers"

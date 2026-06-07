@@ -1,4 +1,5 @@
 import asyncio
+import ipaddress
 from typing import Optional
 
 import aiohttp
@@ -9,8 +10,16 @@ from .models import PingResult
 GEOIP_API = "https://api.ipquery.io/"
 
 
-async def geoip_lookup(ip: str, session: Optional[aiohttp.ClientSession] = None) -> dict:
+async def geoip_lookup(
+    ip: str, session: Optional[aiohttp.ClientSession] = None
+) -> dict:
     """Lookup GeoIP info for an IP address over HTTPS."""
+    # Validate before interpolating into the URL so a malformed value can't
+    # alter the request path/query.
+    try:
+        ip = str(ipaddress.ip_address(ip))
+    except ValueError:
+        return {}
     own_session = session is None
     if own_session:
         session = aiohttp.ClientSession()
