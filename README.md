@@ -114,3 +114,7 @@ Edit `config.yaml` to add/remove mirrors, change settings, or modify NordVPN tar
 - rich (beautiful CLI output + live dashboard)
 - SQLite (history tracking)
 - PyYAML + python-dotenv (config)
+
+## Codex CLI
+
+Codex CLI can use the repo root `AGENTS.md` and the tracked `.codex/config.toml` defaults in this workspace.
