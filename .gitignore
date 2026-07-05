@@ -7,6 +7,7 @@ __pycache__/
 !config.yaml
 !.env.example
 .DS_Store
+.cursor/
 results/
 history.db
 
