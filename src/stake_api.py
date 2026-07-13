@@ -1,10 +1,8 @@
 import asyncio
 import json
 import time
-from typing import Optional
 
 from curl_cffi import requests as cffi_requests
-
 from rich.console import Console
 
 from .models import MirrorConfig, PingResult
@@ -45,7 +43,7 @@ def _cffi_post(
     headers: dict,
     cookies: dict,
     timeout: float = 10.0,
-) -> tuple[int, Optional[dict]]:
+) -> tuple[int, dict | None]:
     """Synchronous curl_cffi POST with Chrome TLS fingerprint."""
     try:
         r = cffi_requests.post(
@@ -86,7 +84,7 @@ async def api_latency_test(
     session_token: str,
     rounds: int = 3,
     timeout: float = 10.0,
-) -> Optional[float]:
+) -> float | None:
     """Test API latency via curl_cffi (Chrome TLS fingerprint bypasses Cloudflare)."""
     if not _require_trusted(mirror):
         return None
@@ -118,7 +116,7 @@ async def bet_latency_test(
     mirror: MirrorConfig,
     session_token: str,
     timeout: float = 10.0,
-) -> Optional[float]:
+) -> float | None:
     """Test bet placement latency with $0 Dice bet.
 
     Note: casinoBet mutation was removed from Stake's GraphQL schema.

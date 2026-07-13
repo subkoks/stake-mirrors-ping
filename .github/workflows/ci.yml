@@ -28,21 +28,20 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install -e .
 
-    - name: Lint with ruff (if available)
+    - name: Lint with ruff
       run: |
-        pip install ruff || echo "Ruff not required"
-        ruff check . || echo "No ruff config, skipping"
-      continue-on-error: true
+        pip install ruff
+        ruff check src/ tests/
 
     - name: Test basic import
       run: python -m src.main --help
 
-    - name: Run basic ping test (no API key)
+    - name: Run tests
       run: |
-        python -m src.main --rounds 1 --timeout 5 --skip-vpn --skip-geoip
-      continue-on-error: true
+        pip install pytest
+        pytest tests/ -v
 
   security:
     runs-on: ubuntu-latest
@@ -52,7 +51,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
       with:
-        python-version: '3.12'
+        python-version: '3.13'
 
     - name: Install dependencies
       run: |
@@ -61,9 +60,9 @@ jobs:
 
     - name: Check for security vulnerabilities
       run: |
-        safety check --json || echo "Safety check completed"
-        bandit -r src/ -f json || echo "Bandit scan completed"
-      continue-on-error: true
+        pip install safety bandit
+        safety check
+        bandit -r src/ || true
 
   code-quality:
     runs-on: ubuntu-latest
@@ -73,21 +72,18 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
       with:
-        python-version: '3.12'
+        python-version: '3.13'
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install black isort mypy
+        pip install isort mypy ruff
 
-    - name: Check code formatting with black
-      run: black --check . || echo "Run 'black .' to format code"
-      continue-on-error: true
+    - name: Check code formatting with ruff
+      run: ruff format --check src/ tests/
 
     - name: Check import sorting with isort
-      run: isort --check-only . || echo "Run 'isort .' to sort imports"
-      continue-on-error: true
+      run: isort --check-only src/ tests/
 
     - name: Type check with mypy
-      run: mypy src/ --ignore-missing-imports || echo "Type hints needed"
-      continue-on-error: true
+      run: mypy src/

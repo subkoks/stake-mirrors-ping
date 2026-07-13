@@ -2,16 +2,15 @@ import asyncio
 import socket
 import ssl
 import time
-from typing import Optional
 
 import aiohttp
 import certifi
 
-from .models import MirrorConfig, PingResult
 from .log import logger
+from .models import MirrorConfig, PingResult
 
 
-async def tcp_ping(host: str, port: int = 443, timeout: float = 10.0) -> Optional[float]:
+async def tcp_ping(host: str, port: int = 443, timeout: float = 10.0) -> float | None:
     """Measure TCP connect latency in ms."""
     try:
         start = time.perf_counter()
@@ -29,8 +28,8 @@ async def tcp_ping(host: str, port: int = 443, timeout: float = 10.0) -> Optiona
 
 
 async def https_ping(
-    url: str, timeout: float = 10.0, session: Optional[aiohttp.ClientSession] = None
-) -> tuple[Optional[float], Optional[int], bool]:
+    url: str, timeout: float = 10.0, session: aiohttp.ClientSession | None = None
+) -> tuple[float | None, int | None, bool]:
     """Measure HTTPS HEAD request latency. Returns (latency_ms, status_code, ssl_valid)."""
     ssl_ctx = ssl.create_default_context(cafile=certifi.where())
     own_session = session is None
@@ -38,7 +37,7 @@ async def https_ping(
         session = aiohttp.ClientSession()
     try:
         start = time.perf_counter()
-        async with session.head(
+        async with session.head(  # type: ignore[union-attr]
             url,
             timeout=aiohttp.ClientTimeout(total=timeout),
             ssl=ssl_ctx,
@@ -53,10 +52,10 @@ async def https_ping(
         return None, None, True
     finally:
         if own_session:
-            await session.close()
+            await session.close()  # type: ignore[union-attr]
 
 
-async def dns_resolve(domain: str) -> tuple[Optional[str], Optional[float]]:
+async def dns_resolve(domain: str) -> tuple[str | None, float | None]:
     """Resolve domain to IP and measure DNS lookup time."""
     try:
         start = time.perf_counter()
@@ -64,7 +63,7 @@ async def dns_resolve(domain: str) -> tuple[Optional[str], Optional[float]]:
         result = await loop.getaddrinfo(domain, 443, family=socket.AF_INET)
         elapsed = (time.perf_counter() - start) * 1000
         ip = result[0][4][0] if result else None
-        return ip, round(elapsed, 2)
+        return str(ip) if ip else None, round(elapsed, 2)
     except Exception as e:
         logger.debug("dns_resolve failed for %s: %s", domain, e)
         return None, None
@@ -94,7 +93,9 @@ async def ping_mirror(
         if t is not None:
             tcp_times.append(t)
         await asyncio.sleep(0.1)
-    result.tcp_latency_ms = round(sum(tcp_times) / len(tcp_times), 2) if tcp_times else None
+    result.tcp_latency_ms = (
+        round(sum(tcp_times) / len(tcp_times), 2) if tcp_times else None
+    )
 
     # HTTPS ping (average over rounds)
     https_times = []
@@ -102,7 +103,9 @@ async def ping_mirror(
     ssl_valid = True
     async with aiohttp.ClientSession() as session:
         for _ in range(rounds):
-            latency, status, ssl_ok = await https_ping(mirror.url, timeout=timeout, session=session)
+            latency, status, ssl_ok = await https_ping(
+                mirror.url, timeout=timeout, session=session
+            )
             if latency is not None:
                 https_times.append(latency)
             if status is not None:
@@ -111,10 +114,14 @@ async def ping_mirror(
                 ssl_valid = False
             await asyncio.sleep(0.1)
 
-    result.https_latency_ms = round(sum(https_times) / len(https_times), 2) if https_times else None
+    result.https_latency_ms = (
+        round(sum(https_times) / len(https_times), 2) if https_times else None
+    )
     result.ssl_valid = ssl_valid
     result.http_status = statuses[0] if statuses else None
-    result.is_up = bool(https_times and statuses and statuses[0] in (200, 301, 302, 403))
+    result.is_up = bool(
+        https_times and statuses and statuses[0] in (200, 301, 302, 403)
+    )
 
     return result
 

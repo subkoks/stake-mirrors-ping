@@ -16,6 +16,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dependabot configuration
 - EditorConfig for consistent coding style
 - Professional badges to README
+- Pre-commit hooks for ruff, mypy, and code quality checks
+- geoip2 dependency to pyproject.toml
+
+### Changed
+- Upgraded Python target from 3.12 to 3.13
+- Updated development status from Beta to Production/Stable
+- Updated GitHub Actions to use Python 3.13
+- Improved CI workflow with proper pytest integration
+- Enhanced security scanning with Safety CLI
+- Fixed 92 ruff linting issues
+- Fixed 13 mypy type errors
+- Updated pip from 25.3 to 26.1.2 (security fixes)
+- Simplified requirements.txt to core dependencies only
+- Added ruff and mypy to dev dependency groups
+
+### Fixed
+- Type annotations for optional aiohttp sessions
+- Unused loop variables in reporter.py
+- Whitespace issues in nordvpn.py
+- Type annotations in history.py, dns_resolver.py, dashboard.py
+- Config loading to handle empty YAML files safely
+- HistoryDB path handling for None values
 
 ## [1.0.0] - 2026-02-21
 

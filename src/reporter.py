@@ -1,13 +1,10 @@
 import csv
-import json
 import os
 from datetime import datetime
-from typing import Optional
 
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
-from rich.text import Text
+from rich.table import Table
 
 from .core.serializers import (
     MirrorResultSchema,
@@ -17,11 +14,10 @@ from .core.serializers import (
 )
 from .models import PingResult, VPNRecommendation
 
-
 console = Console()
 
 
-def latency_color(ms: Optional[float]) -> str:
+def latency_color(ms: float | None) -> str:
     """Return color based on latency value."""
     if ms is None:
         return "dim"
@@ -34,14 +30,16 @@ def latency_color(ms: Optional[float]) -> str:
     return "bold red"
 
 
-def fmt_ms(ms: Optional[float]) -> str:
+def fmt_ms(ms: float | None) -> str:
     """Format milliseconds for display."""
     if ms is None:
         return "—"
     return f"{ms:.1f}ms"
 
 
-def print_results_table(results: list[PingResult], title: str = "Stake Mirror Ping Results") -> None:
+def print_results_table(
+    results: list[PingResult], title: str = "Stake Mirror Ping Results"
+) -> None:
     """Print a sorted Rich table of ping results."""
     # Sort by best latency (None values last)
     sorted_results = sorted(
@@ -87,14 +85,16 @@ def print_results_table(results: list[PingResult], title: str = "Stake Mirror Pi
     # Winner announcement
     if sorted_results and sorted_results[0].is_up:
         winner = sorted_results[0]
-        console.print(Panel(
-            f"[bold green]🏆 FASTEST MIRROR: {winner.mirror.domain}[/]\n"
-            f"   Best latency: {fmt_ms(winner.best_latency_ms)}\n"
-            f"   Location: {winner.server_location or 'Unknown'}\n"
-            f"   URL: {winner.mirror.url}",
-            title="Winner",
-            border_style="green",
-        ))
+        console.print(
+            Panel(
+                f"[bold green]🏆 FASTEST MIRROR: {winner.mirror.domain}[/]\n"
+                f"   Best latency: {fmt_ms(winner.best_latency_ms)}\n"
+                f"   Location: {winner.server_location or 'Unknown'}\n"
+                f"   URL: {winner.mirror.url}",
+                title="Winner",
+                border_style="green",
+            )
+        )
 
 
 def print_vpn_recommendations(
@@ -102,7 +102,9 @@ def print_vpn_recommendations(
 ) -> None:
     """Print NordVPN recommendations table."""
     if not recommendations:
-        console.print("[yellow]No VPN recommendations available (GeoIP data missing)[/]")
+        console.print(
+            "[yellow]No VPN recommendations available (GeoIP data missing)[/]"
+        )
         return
 
     table = Table(
@@ -121,7 +123,7 @@ def print_vpn_recommendations(
 
     # Flatten and sort by estimated total latency
     all_recs = []
-    for domain, recs in recommendations.items():
+    for _domain, recs in recommendations.items():
         if recs:
             all_recs.append(recs[0])  # Best VPN per mirror
 
@@ -145,14 +147,16 @@ def print_vpn_recommendations(
 
     if all_recs:
         best = all_recs[0]
-        console.print(Panel(
-            f"[bold magenta]🎯 RECOMMENDED SETUP:[/]\n"
-            f"   NordVPN → [bold]{best.vpn_server.city}, {best.vpn_server.country}[/]\n"
-            f"   Mirror  → [bold]{best.mirror.domain}[/]\n"
-            f"   Est. latency: {fmt_ms(best.estimated_latency_ms)}",
-            title="Best VPN + Mirror Combo",
-            border_style="magenta",
-        ))
+        console.print(
+            Panel(
+                f"[bold magenta]🎯 RECOMMENDED SETUP:[/]\n"
+                f"   NordVPN → [bold]{best.vpn_server.city}, {best.vpn_server.country}[/]\n"
+                f"   Mirror  → [bold]{best.mirror.domain}[/]\n"
+                f"   Est. latency: {fmt_ms(best.estimated_latency_ms)}",
+                title="Best VPN + Mirror Combo",
+                border_style="magenta",
+            )
+        )
 
 
 def export_results(
@@ -197,7 +201,7 @@ def export_results(
 
         # Build VPN recommendation schemas
         vpn_schemas = []
-        for domain, recs in recommendations.items():
+        for _domain, recs in recommendations.items():
             for rec in recs:
                 vpn_schemas.append(
                     VPNRecommendationSchema(
@@ -213,7 +217,9 @@ def export_results(
 
         # Build scan summary
         up_count = sum(1 for r in results if r.is_up)
-        fastest = sorted_results[0] if sorted_results and sorted_results[0].is_up else None
+        fastest = (
+            sorted_results[0] if sorted_results and sorted_results[0].is_up else None
+        )
         summary = ScanSummarySchema(
             total_mirrors=len(results),
             up_mirrors=up_count,
@@ -235,22 +241,45 @@ def export_results(
         filepath = os.path.join(output_dir, f"results_{timestamp}.csv")
         with open(filepath, "w", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow([
-                "Rank", "Domain", "URL", "Status", "IP", "Location",
-                "DNS_ms", "TCP_ms", "HTTPS_ms", "API_ms", "Bet_ms",
-                "Best_ms", "SSL", "Error",
-            ])
+            writer.writerow(
+                [
+                    "Rank",
+                    "Domain",
+                    "URL",
+                    "Status",
+                    "IP",
+                    "Location",
+                    "DNS_ms",
+                    "TCP_ms",
+                    "HTTPS_ms",
+                    "API_ms",
+                    "Bet_ms",
+                    "Best_ms",
+                    "SSL",
+                    "Error",
+                ]
+            )
             for i, r in enumerate(
                 sorted(results, key=lambda x: x.best_latency_ms or 99999), 1
             ):
-                writer.writerow([
-                    i, r.mirror.domain, r.mirror.url,
-                    "UP" if r.is_up else "DOWN",
-                    r.ip_address, r.server_location,
-                    r.dns_resolve_ms, r.tcp_latency_ms, r.https_latency_ms,
-                    r.api_latency_ms, r.bet_latency_ms,
-                    r.best_latency_ms, r.ssl_valid, r.error,
-                ])
+                writer.writerow(
+                    [
+                        i,
+                        r.mirror.domain,
+                        r.mirror.url,
+                        "UP" if r.is_up else "DOWN",
+                        r.ip_address,
+                        r.server_location,
+                        r.dns_resolve_ms,
+                        r.tcp_latency_ms,
+                        r.https_latency_ms,
+                        r.api_latency_ms,
+                        r.bet_latency_ms,
+                        r.best_latency_ms,
+                        r.ssl_valid,
+                        r.error,
+                    ]
+                )
     else:
         raise ValueError(f"Unknown format: {fmt}")
 

@@ -24,9 +24,9 @@ def handle_run_scan(args_json: str) -> None:
     try:
         config_dict = json.loads(args_json)
         config = OrchestratorConfig(**config_dict)
-        
+
         result = asyncio.run(run_scan(config))
-        
+
         # Convert to dict for JSON serialization
         output = {
             "success": True,
@@ -71,10 +71,10 @@ def handle_get_history_stats(args_json: str) -> None:
         options = json.loads(args_json) if args_json else {}
         domain = options.get("domain")
         hours = options.get("hours", 24)
-        
+
         with HistoryDB() as db:
             stats = db.get_uptime_stats_serialized(domain, hours)
-            
+
         output = {
             "success": True,
             "stats": [s.model_dump() for s in stats],
@@ -89,7 +89,7 @@ def handle_get_config() -> None:
     """Handle get-config command."""
     try:
         from core import load_config
-        
+
         config = load_config()
         output = {
             "success": True,
@@ -105,21 +105,22 @@ def handle_update_config(args_json: str) -> None:
     """Handle update-config command."""
     try:
         import yaml
+
         from core import load_config
-        
+
         new_config = json.loads(args_json)
         config_path = new_config.get("config_path", "config.yaml")
-        
+
         # Load existing config and merge
         existing = load_config(config_path)
         for key, value in new_config.items():
             if key != "config_path":
                 existing[key] = value
-        
+
         # Save back
         with open(config_path, "w") as f:
             yaml.dump(existing, f, default_flow_style=False)
-        
+
         output = {"success": True}
         print_json(output)
     except Exception as e:
@@ -132,10 +133,10 @@ def main() -> None:
     if len(sys.argv) < 2:
         print_json({"success": False, "error": "No command specified"})
         sys.exit(1)
-    
+
     command = sys.argv[1]
     args_json = sys.argv[2] if len(sys.argv) > 2 else "{}"
-    
+
     if command == "run-scan":
         handle_run_scan(args_json)
     elif command == "get-history-stats":
