@@ -76,4 +76,4 @@ class ScanResultSchema(BaseModel):
 
     def model_dump_json(self, **kwargs) -> str:
         """Export to JSON string."""
-        return super().model_dump_json(indent=2, **kwargs)
+        return super().model_dump_json(indent=2, **kwargs)  # type: ignore[no-any-return]
