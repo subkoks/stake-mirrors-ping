@@ -1,0 +1,74 @@
+name: Build Desktop App
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  release:
+    types: [created]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt || pip install aiohttp certifi curl-cffi python-dotenv pyyaml requests rich pydantic
+      
+      - name: Run Python tests
+        run: |
+          python -m pytest tests/ -v
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      
+      - name: Install GUI dependencies
+        working-directory: ./gui
+        run: npm ci
+      
+      - name: Build GUI (macOS)
+        if: matrix.os == 'macos-latest'
+        working-directory: ./gui
+        run: npm run build:mac
+      
+      - name: Build GUI (Windows)
+        if: matrix.os == 'windows-latest'
+        working-directory: ./gui
+        run: npm run build:win
+      
+      - name: Build GUI (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: ./gui
+        run: npm run build:linux
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-app-${{ matrix.os }}
+          path: gui/dist/*
+          retention-days: 30
+      
+      - name: Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: gui/dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
