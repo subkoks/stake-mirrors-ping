@@ -1,10 +1,8 @@
 import math
-from typing import Optional
 
 import aiohttp
 
-from .models import NordVPNServer, VPNRecommendation, PingResult
-
+from .models import NordVPNServer, PingResult, VPNRecommendation
 
 NORDVPN_API = "https://api.nordvpn.com/v1/servers"
 NORDVPN_COUNTRIES_API = "https://api.nordvpn.com/v1/servers/countries"
@@ -26,7 +24,7 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 def estimate_vpn_latency(distance_km: float, server_load: int) -> float:
     """Rough estimate of VPN overhead in ms based on distance and load.
-    
+
     ~0.01ms per km (fiber speed) + load penalty + base VPN overhead (~15ms).
     """
     base_overhead = 15.0
@@ -40,10 +38,10 @@ async def fetch_nordvpn_servers(
     limit: int = 500,
 ) -> list[NordVPNServer]:
     """Fetch NordVPN servers for target countries."""
-    servers = []
+    servers: list[NordVPNServer] = []
     async with aiohttp.ClientSession() as session:
         # Fetch servers with recommendations (low load, good performance)
-        params = {
+        params: dict[str, str | int] = {
             "limit": limit,
             "filters[servers_technologies][identifier]": "openvpn_udp",
         }
@@ -63,22 +61,29 @@ async def fetch_nordvpn_servers(
 
     for srv in data:
         country_name = srv.get("locations", [{}])[0].get("country", {}).get("name", "")
-        city_name = srv.get("locations", [{}])[0].get("country", {}).get("city", {}).get("name", "")
+        city_name = (
+            srv.get("locations", [{}])[0]
+            .get("country", {})
+            .get("city", {})
+            .get("name", "")
+        )
         lat = srv.get("locations", [{}])[0].get("latitude", 0)
         lon = srv.get("locations", [{}])[0].get("longitude", 0)
 
         if country_name.lower() not in country_set:
             continue
 
-        servers.append(NordVPNServer(
-            name=srv.get("name", ""),
-            hostname=srv.get("hostname", ""),
-            country=country_name,
-            city=city_name or country_name,
-            lat=float(lat),
-            lon=float(lon),
-            load=srv.get("load", 0),
-        ))
+        servers.append(
+            NordVPNServer(
+                name=srv.get("name", ""),
+                hostname=srv.get("hostname", ""),
+                country=country_name,
+                city=city_name or country_name,
+                lat=float(lat),
+                lon=float(lon),
+                load=srv.get("load", 0),
+            )
+        )
 
     return servers
 
@@ -99,13 +104,15 @@ def find_best_vpn_for_mirror(
         mirror_latency = result.best_latency_ms or 999
         total = round(mirror_latency + vpn_overhead, 2)
 
-        recommendations.append(VPNRecommendation(
-            mirror=result.mirror,
-            vpn_server=srv,
-            estimated_latency_ms=total,
-            distance_km=round(dist, 1),
-            mirror_latency_ms=mirror_latency,
-        ))
+        recommendations.append(
+            VPNRecommendation(
+                mirror=result.mirror,
+                vpn_server=srv,
+                estimated_latency_ms=total,
+                distance_km=round(dist, 1),
+                mirror_latency_ms=mirror_latency,
+            )
+        )
 
     recommendations.sort(key=lambda r: r.estimated_latency_ms)
     return recommendations[:top_n]

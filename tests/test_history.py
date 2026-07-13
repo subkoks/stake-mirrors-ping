@@ -1,10 +1,17 @@
 """Tests for SQLite history module."""
 
-import pytest
 from pathlib import Path
 
+import pytest
+
+from src.history import (
+    get_domain_history,
+    get_latest_scan,
+    get_scan_count,
+    get_uptime_stats,
+    save_results,
+)
 from src.models import MirrorConfig, PingResult
-from src.history import save_results, get_domain_history, get_uptime_stats, get_scan_count, get_latest_scan
 
 
 @pytest.fixture
@@ -21,42 +28,57 @@ def sample_results() -> list[PingResult]:
     ]
     return [
         PingResult(
-            mirror=mirrors[0], is_up=True,
-            tcp_latency_ms=25.0, https_latency_ms=50.0,
-            ip_address="1.2.3.4", ssl_valid=True, http_status=200,
+            mirror=mirrors[0],
+            is_up=True,
+            tcp_latency_ms=25.0,
+            https_latency_ms=50.0,
+            ip_address="1.2.3.4",
+            ssl_valid=True,
+            http_status=200,
         ),
         PingResult(
-            mirror=mirrors[1], is_up=False,
+            mirror=mirrors[1],
+            is_up=False,
             error="DNS resolution failed",
         ),
     ]
 
 
 class TestSaveResults:
-    def test_saves_and_returns_count(self, tmp_db: str, sample_results: list[PingResult]) -> None:
+    def test_saves_and_returns_count(
+        self, tmp_db: str, sample_results: list[PingResult]
+    ) -> None:
         count = save_results(sample_results, db_path=tmp_db)
         assert count == 2
 
-    def test_multiple_saves_accumulate(self, tmp_db: str, sample_results: list[PingResult]) -> None:
+    def test_multiple_saves_accumulate(
+        self, tmp_db: str, sample_results: list[PingResult]
+    ) -> None:
         save_results(sample_results, db_path=tmp_db)
         save_results(sample_results, db_path=tmp_db)
         assert get_scan_count(db_path=tmp_db) == 2
 
 
 class TestGetDomainHistory:
-    def test_returns_history_for_domain(self, tmp_db: str, sample_results: list[PingResult]) -> None:
+    def test_returns_history_for_domain(
+        self, tmp_db: str, sample_results: list[PingResult]
+    ) -> None:
         save_results(sample_results, db_path=tmp_db)
         history = get_domain_history("stake.com", db_path=tmp_db)
         assert len(history) == 1
         assert history[0]["domain"] == "stake.com"
         assert history[0]["is_up"] == 1
 
-    def test_returns_empty_for_unknown_domain(self, tmp_db: str, sample_results: list[PingResult]) -> None:
+    def test_returns_empty_for_unknown_domain(
+        self, tmp_db: str, sample_results: list[PingResult]
+    ) -> None:
         save_results(sample_results, db_path=tmp_db)
         history = get_domain_history("unknown.com", db_path=tmp_db)
         assert history == []
 
-    def test_respects_limit(self, tmp_db: str, sample_results: list[PingResult]) -> None:
+    def test_respects_limit(
+        self, tmp_db: str, sample_results: list[PingResult]
+    ) -> None:
         for _ in range(5):
             save_results(sample_results, db_path=tmp_db)
         history = get_domain_history("stake.com", limit=3, db_path=tmp_db)
@@ -64,7 +86,9 @@ class TestGetDomainHistory:
 
 
 class TestGetLatestScan:
-    def test_returns_latest_scan(self, tmp_db: str, sample_results: list[PingResult]) -> None:
+    def test_returns_latest_scan(
+        self, tmp_db: str, sample_results: list[PingResult]
+    ) -> None:
         save_results(sample_results, db_path=tmp_db)
         latest = get_latest_scan(db_path=tmp_db)
         assert len(latest) == 2
@@ -89,7 +113,9 @@ class TestGetUptimeStats:
 
 
 class TestGetScanCount:
-    def test_counts_distinct_scans(self, tmp_db: str, sample_results: list[PingResult]) -> None:
+    def test_counts_distinct_scans(
+        self, tmp_db: str, sample_results: list[PingResult]
+    ) -> None:
         assert get_scan_count(db_path=tmp_db) == 0
         save_results(sample_results, db_path=tmp_db)
         assert get_scan_count(db_path=tmp_db) == 1

@@ -2,21 +2,18 @@
 
 import asyncio
 from datetime import datetime
-from typing import Optional
 
 from rich.console import Console
 from rich.layout import Layout
 from rich.live import Live
 from rich.panel import Panel
 from rich.table import Table
-from rich.text import Text
 
-from .models import MirrorConfig, PingResult, VPNRecommendation
-from .pinger import ping_all_mirrors
 from .dns_resolver import enrich_with_geoip
+from .models import MirrorConfig, PingResult
+from .pinger import ping_all_mirrors
+from .reporter import fmt_ms, latency_color
 from .stake_api import enrich_with_api_tests
-from .reporter import latency_color, fmt_ms
-
 
 console = Console()
 
@@ -80,11 +77,15 @@ def _build_mirror_table(results: list[PingResult], show_api: bool = False) -> Ta
             f"[{latency_color(r.https_latency_ms)}]{fmt_ms(r.https_latency_ms)}[/]",
         ]
         if show_api:
-            row.append(f"[{latency_color(r.api_latency_ms)}]{fmt_ms(r.api_latency_ms)}[/]")
-        row.extend([
-            f"[{latency_color(r.best_latency_ms)}]{fmt_ms(r.best_latency_ms)}[/]",
-            trend,
-        ])
+            row.append(
+                f"[{latency_color(r.api_latency_ms)}]{fmt_ms(r.api_latency_ms)}[/]"
+            )
+        row.extend(
+            [
+                f"[{latency_color(r.best_latency_ms)}]{fmt_ms(r.best_latency_ms)}[/]",
+                trend,
+            ]
+        )
         table.add_row(*row)
 
     return table
@@ -96,7 +97,7 @@ def _build_footer(results: list[PingResult]) -> Panel:
     if not sorted_up:
         return Panel("[red]No mirrors responding[/]", border_style="red")
 
-    sorted_up.sort(key=lambda r: r.best_latency_ms)
+    sorted_up.sort(key=lambda r: r.best_latency_ms or 999)
     best = sorted_up[0]
     second = sorted_up[1] if len(sorted_up) > 1 else None
 
@@ -141,14 +142,16 @@ async def run_live_dashboard(
     concurrency: int = 16,
     skip_geoip: bool = False,
     api: bool = False,
-    session_token: Optional[str] = None,
+    session_token: str | None = None,
 ) -> None:
     """Run the live auto-refreshing dashboard."""
     cycle = 0
 
     # Initial run
     console.print("[dim]Running initial scan...[/]")
-    results = await ping_all_mirrors(mirrors, rounds=rounds, timeout=timeout, concurrency=concurrency)
+    results = await ping_all_mirrors(
+        mirrors, rounds=rounds, timeout=timeout, concurrency=concurrency
+    )
     if not skip_geoip:
         results = await enrich_with_geoip(results)
     if api and session_token:
@@ -165,12 +168,22 @@ async def run_live_dashboard(
 
                 # Re-ping all mirrors
                 new_results = await ping_all_mirrors(
-                    mirrors, rounds=rounds, timeout=timeout, concurrency=concurrency,
+                    mirrors,
+                    rounds=rounds,
+                    timeout=timeout,
+                    concurrency=concurrency,
                 )
                 # Carry over GeoIP from previous results to avoid rate limiting
                 ip_to_geo = {
-                    r.ip_address: (r.server_location, r.server_country, r.server_city, r.server_lat, r.server_lon)
-                    for r in results if r.ip_address and r.server_location
+                    r.ip_address: (
+                        r.server_location,
+                        r.server_country,
+                        r.server_city,
+                        r.server_lat,
+                        r.server_lon,
+                    )
+                    for r in results
+                    if r.ip_address and r.server_location
                 }
                 for r in new_results:
                     if r.ip_address in ip_to_geo:
@@ -180,20 +193,30 @@ async def run_live_dashboard(
                         r.server_city = city
                         r.server_lat = lat
                         r.server_lon = lon
-                    elif not skip_geoip and r.ip_address and r.ip_address not in ip_to_geo:
+                    elif (
+                        not skip_geoip
+                        and r.ip_address
+                        and r.ip_address not in ip_to_geo
+                    ):
                         # New IP, resolve it
                         from .dns_resolver import geoip_lookup
+
                         geo = await geoip_lookup(r.ip_address)
                         if geo.get("status") == "success":
                             r.server_country = geo.get("country", "Unknown")
                             r.server_city = geo.get("city", "Unknown")
-                            r.server_location = f"{geo.get('city', '?')}, {geo.get('country', '?')}"
+                            r.server_location = (
+                                f"{geo.get('city', '?')}, {geo.get('country', '?')}"
+                            )
                             r.server_lat = geo.get("lat")
                             r.server_lon = geo.get("lon")
 
                 if api and session_token:
                     new_results = await enrich_with_api_tests(
-                        new_results, session_token, rounds=rounds, run_bets=False,
+                        new_results,
+                        session_token,
+                        rounds=rounds,
+                        run_bets=False,
                     )
 
                 results = new_results

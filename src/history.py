@@ -1,13 +1,10 @@
 """SQLite-based mirror health history for tracking latency over time."""
 
-import sqlite3
 import os
-from contextlib import contextmanager
+import sqlite3
 from datetime import datetime
-from typing import Optional
 
 from .models import PingResult
-
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "history.db")
 
@@ -17,7 +14,7 @@ class HistoryDB:
 
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
-        self.conn: Optional[sqlite3.Connection] = None
+        self.conn: sqlite3.Connection | None = None
 
     def __enter__(self) -> "HistoryDB":
         self.conn = sqlite3.connect(self.db_path)
@@ -64,31 +61,36 @@ class HistoryDB:
         ts = datetime.now().isoformat()
         rows = []
         for r in results:
-            rows.append((
-                ts,
-                r.mirror.domain,
-                r.mirror.url,
-                int(r.is_up),
-                r.ip_address,
-                r.server_location,
-                r.dns_resolve_ms,
-                r.tcp_latency_ms,
-                r.https_latency_ms,
-                r.api_latency_ms,
-                None,  # ws_ms — deprecated
-                r.bet_latency_ms,
-                r.best_latency_ms,
-                int(r.ssl_valid),
-                r.http_status,
-                r.error,
-            ))
-        self.conn.executemany("""
+            rows.append(
+                (
+                    ts,
+                    r.mirror.domain,
+                    r.mirror.url,
+                    int(r.is_up),
+                    r.ip_address,
+                    r.server_location,
+                    r.dns_resolve_ms,
+                    r.tcp_latency_ms,
+                    r.https_latency_ms,
+                    r.api_latency_ms,
+                    None,  # ws_ms — deprecated
+                    r.bet_latency_ms,
+                    r.best_latency_ms,
+                    int(r.ssl_valid),
+                    r.http_status,
+                    r.error,
+                )
+            )
+        self.conn.executemany(
+            """
             INSERT INTO ping_history
             (timestamp, domain, url, is_up, ip_address, server_location,
              dns_ms, tcp_ms, https_ms, api_ms, ws_ms, bet_ms, best_ms,
              ssl_valid, http_status, error)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, rows)
+        """,
+            rows,
+        )
         self.conn.commit()
         return len(rows)
 
@@ -96,19 +98,23 @@ class HistoryDB:
         """Get recent history for a specific mirror domain."""
         assert self.conn is not None
         self.conn.row_factory = sqlite3.Row
-        rows = self.conn.execute("""
+        rows = self.conn.execute(
+            """
             SELECT * FROM ping_history
             WHERE domain = ?
             ORDER BY timestamp DESC
             LIMIT ?
-        """, (domain, limit)).fetchall()
+        """,
+            (domain, limit),
+        ).fetchall()
         return [dict(r) for r in rows]
 
     def get_recent_scans(self, limit: int = 10) -> list[dict]:
         """Get recent scan timestamps with mirror counts."""
         assert self.conn is not None
         self.conn.row_factory = sqlite3.Row
-        rows = self.conn.execute("""
+        rows = self.conn.execute(
+            """
             SELECT
                 timestamp,
                 COUNT(*) as mirror_count,
@@ -117,19 +123,24 @@ class HistoryDB:
             GROUP BY timestamp
             ORDER BY timestamp DESC
             LIMIT ?
-        """, (limit,)).fetchall()
+        """,
+            (limit,),
+        ).fetchall()
         return [dict(r) for r in rows]
 
     def get_mirror_history(self, domain: str, days: int = 7) -> list[dict]:
         """Get history for a mirror over the last N days."""
         assert self.conn is not None
         self.conn.row_factory = sqlite3.Row
-        rows = self.conn.execute("""
+        rows = self.conn.execute(
+            """
             SELECT * FROM ping_history
             WHERE domain = ?
             AND timestamp >= datetime('now', ?)
             ORDER BY timestamp DESC
-        """, (domain, f"-{days} days")).fetchall()
+        """,
+            (domain, f"-{days} days"),
+        ).fetchall()
         return [dict(r) for r in rows]
 
     def get_latest_scan(self) -> list[dict]:
@@ -141,14 +152,19 @@ class HistoryDB:
         ).fetchone()["ts"]
         if not latest_ts:
             return []
-        rows = self.conn.execute("""
+        rows = self.conn.execute(
+            """
             SELECT * FROM ping_history
             WHERE timestamp = ?
             ORDER BY best_ms ASC
-        """, (latest_ts,)).fetchall()
+        """,
+            (latest_ts,),
+        ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_uptime_stats(self, domain: Optional[str] = None, hours: int = 24) -> dict[str, dict]:
+    def get_uptime_stats(
+        self, domain: str | None = None, hours: int = 24
+    ) -> dict[str, dict]:
         """Get uptime percentage and average latency stats."""
         assert self.conn is not None
         self.conn.row_factory = sqlite3.Row
@@ -176,11 +192,17 @@ class HistoryDB:
         stats = {}
         for r in rows:
             d = dict(r)
-            d["uptime_pct"] = round(d["up_checks"] / d["total_checks"] * 100, 1) if d["total_checks"] else 0
+            d["uptime_pct"] = (
+                round(d["up_checks"] / d["total_checks"] * 100, 1)
+                if d["total_checks"]
+                else 0
+            )
             stats[d["domain"]] = d
         return stats
 
-    def get_uptime_stats_serialized(self, domain: Optional[str] = None, hours: int = 24) -> list:
+    def get_uptime_stats_serialized(
+        self, domain: str | None = None, hours: int = 24
+    ) -> list:
         """Get uptime stats as serialized schemas."""
         from .core.serializers import HistoryStatsSchema
 
@@ -202,7 +224,7 @@ class HistoryDB:
     def get_scan_count(self) -> int:
         """Get total number of distinct scans in history."""
         assert self.conn is not None
-        count = self.conn.execute(
+        count: int = self.conn.execute(
             "SELECT COUNT(DISTINCT timestamp) as cnt FROM ping_history"
         ).fetchone()[0]
         return count
@@ -211,7 +233,7 @@ class HistoryDB:
 # Legacy functions for backward compatibility
 def _get_conn(db_path: str = DB_PATH) -> sqlite3.Connection:
     """Get a connection and ensure tables exist (legacy)."""
-    conn = sqlite3.connect(db_path)
+    conn: sqlite3.Connection = sqlite3.connect(db_path)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS ping_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -264,7 +286,7 @@ def get_latest_scan(db_path: str = DB_PATH) -> list[dict]:
 
 
 def get_uptime_stats(
-    domain: Optional[str] = None,
+    domain: str | None = None,
     hours: int = 24,
     db_path: str = DB_PATH,
 ) -> dict:

@@ -22,9 +22,10 @@ dependencies = [
     "pyyaml>=6.0",
     "requests>=2.31",
     "rich>=13.0",
+    "geoip2>=5.0",
 ]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -42,7 +43,7 @@ Changelog = "https://github.com/subkoks/stake-mirrors-ping/blob/main/CHANGELOG.m
 
 [tool.black]
 line-length = 88
-target-version = ['py312']
+target-version = ['py313']
 include = '\.pyi?$'
 exclude = '''
 /(
@@ -65,7 +66,7 @@ ensure_newline_before_comments = true
 
 [tool.ruff]
 line-length = 88
-target-version = "py312"
+target-version = "py313"
 exclude = [".venv", "__pycache__", "build", "dist"]
 
 [tool.ruff.lint]
@@ -83,7 +84,7 @@ ignore = [
 ]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.13"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
@@ -92,7 +93,14 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
+
+[[tool.uv.index]]
+name = "safety"
+url = "https://pkgs.safetycli.com/repository/blackterminal/project/stake-mirrors-ping/pypi/simple/"
+default = false
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
+    "ruff>=0.15.0",
+    "mypy>=2.0.0",
 ]

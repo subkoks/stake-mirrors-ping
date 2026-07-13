@@ -5,7 +5,6 @@ import asyncio
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
@@ -22,16 +21,16 @@ class OrchestratorConfig:
     """Configuration for scan orchestration (CLI-independent)."""
 
     config_path: str = "config.yaml"
-    rounds: Optional[int] = None
-    timeout: Optional[float] = None
+    rounds: int | None = None
+    timeout: float | None = None
     concurrency: int = 16
     skip_geoip: bool = False
     skip_vpn: bool = False
     api_tests: bool = False
     benchmark_bets: bool = False
-    session_token: Optional[str] = None
+    session_token: str | None = None
     save_history: bool = True
-    history_db_path: Optional[str] = None
+    history_db_path: str | None = None
 
 
 def load_config(config_path: str = "config.yaml") -> dict:
@@ -40,7 +39,7 @@ def load_config(config_path: str = "config.yaml") -> dict:
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {config_path}")
     with open(path) as f:
-        return yaml.safe_load(f)
+        return yaml.safe_load(f) or {}
 
 
 def resolve_trusted_domains(config: dict) -> set[str]:
@@ -126,7 +125,7 @@ async def run_scan(config: OrchestratorConfig) -> ScanResult:
 
     # Save to history
     if config.save_history:
-        db_path = config.history_db_path
+        db_path = config.history_db_path or "history.db"
         with HistoryDB(db_path) as db:
             db.save_results(results)
 
@@ -135,9 +134,7 @@ async def run_scan(config: OrchestratorConfig) -> ScanResult:
     if not config.skip_vpn:
         target_countries = nordvpn_config.get("target_regions", [])
         if target_countries:
-            recommendations = await get_vpn_recommendations(
-                results, target_countries
-            )
+            recommendations = await get_vpn_recommendations(results, target_countries)
 
     return ScanResult(
         mirrors=results,
@@ -162,7 +159,11 @@ async def orchestrate(args) -> None:
 
     from ..dashboard import run_live_dashboard
     from ..history import get_scan_count, get_uptime_stats, save_results
-    from ..reporter import export_results, print_results_table, print_vpn_recommendations
+    from ..reporter import (
+        export_results,
+        print_results_table,
+        print_vpn_recommendations,
+    )
 
     console = Console()
     session_token = os.getenv("STAKE_SESSION_TOKEN")
