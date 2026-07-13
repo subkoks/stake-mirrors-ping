@@ -1,41 +1,44 @@
 #!/usr/bin/env python3
 """Orchestrator for Stake Mirrors Ping — prepares inputs and delegates to core services."""
 
-import argparse
 import asyncio
 import os
-import sys
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 import yaml
-from rich.console import Console
-from rich.panel import Panel
-from rich.progress import (
-    BarColumn,
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    TimeElapsedColumn,
-)
 
-from ..dashboard import run_live_dashboard
 from ..dns_resolver import enrich_with_geoip
-from ..history import get_scan_count, get_uptime_stats, save_results
-from ..models import MirrorConfig
+from ..history import HistoryDB
+from ..models import MirrorConfig, PingResult, VPNRecommendation
 from ..nordvpn import get_vpn_recommendations
 from ..pinger import ping_all_mirrors
-from ..reporter import export_results, print_results_table, print_vpn_recommendations
 from ..stake_api import enrich_with_api_tests
 
-console = Console()
+
+@dataclass
+class OrchestratorConfig:
+    """Configuration for scan orchestration (CLI-independent)."""
+
+    config_path: str = "config.yaml"
+    rounds: Optional[int] = None
+    timeout: Optional[float] = None
+    concurrency: int = 16
+    skip_geoip: bool = False
+    skip_vpn: bool = False
+    api_tests: bool = False
+    benchmark_bets: bool = False
+    session_token: Optional[str] = None
+    save_history: bool = True
+    history_db_path: Optional[str] = None
 
 
 def load_config(config_path: str = "config.yaml") -> dict:
     """Load configuration from YAML file."""
     path = Path(config_path)
     if not path.exists():
-        console.print(f"[red]Config file not found: {config_path}[/]")
-        sys.exit(1)
+        raise FileNotFoundError(f"Config file not found: {config_path}")
     with open(path) as f:
         return yaml.safe_load(f)
 
@@ -71,24 +74,101 @@ def parse_mirrors(config: dict) -> list[MirrorConfig]:
     ]
 
 
-async def orchestrate(args: argparse.Namespace) -> None:
-    """Top-level async orchestration for one-shot scan or live dashboard."""
+@dataclass
+class ScanResult:
+    """Result of a scan operation (CLI-independent)."""
+
+    mirrors: list[PingResult]
+    vpn_recommendations: dict[str, list[VPNRecommendation]]
+    timestamp: str
+    scan_id: str
+
+
+async def run_scan(config: OrchestratorConfig) -> ScanResult:
+    """Core scan logic (CLI-independent, no Rich/console dependencies).
+
+    Args:
+        config: OrchestratorConfig with scan parameters
+
+    Returns:
+        ScanResult with mirrors, VPN recommendations, and metadata
+    """
+    from datetime import datetime
+    from uuid import uuid4
+
     # Load config
-    config = load_config(args.config)
-    mirrors = parse_mirrors(config)
-    settings = config.get("settings", {})
-    nordvpn_config = config.get("nordvpn", {})
+    yaml_config = load_config(config.config_path)
+    mirrors = parse_mirrors(yaml_config)
+    settings = yaml_config.get("settings", {})
+    nordvpn_config = yaml_config.get("nordvpn", {})
 
-    rounds = args.rounds or settings.get("ping_rounds", 3)
-    timeout = args.timeout or settings.get("timeout_seconds", 10)
-    concurrency = settings.get("concurrent_limit", 16)
+    rounds = config.rounds or settings.get("ping_rounds", 3)
+    timeout = config.timeout or settings.get("timeout_seconds", 10)
+    concurrency = config.concurrency
 
+    # Step 1: Ping all mirrors
+    results = await ping_all_mirrors(
+        mirrors, rounds=rounds, timeout=timeout, concurrency=concurrency
+    )
+
+    # Step 2: GeoIP enrichment
+    if not config.skip_geoip:
+        results = await enrich_with_geoip(results)
+
+    # Step 3: Stake API tests
+    if config.api_tests and config.session_token:
+        results = await enrich_with_api_tests(
+            results,
+            config.session_token,
+            rounds=rounds,
+            run_bets=config.benchmark_bets,
+        )
+
+    # Save to history
+    if config.save_history:
+        db_path = config.history_db_path
+        with HistoryDB(db_path) as db:
+            db.save_results(results)
+
+    # Step 4: NordVPN recommendations
+    recommendations: dict[str, list[VPNRecommendation]] = {}
+    if not config.skip_vpn:
+        target_countries = nordvpn_config.get("target_regions", [])
+        if target_countries:
+            recommendations = await get_vpn_recommendations(
+                results, target_countries
+            )
+
+    return ScanResult(
+        mirrors=results,
+        vpn_recommendations=recommendations,
+        timestamp=datetime.now().isoformat(),
+        scan_id=str(uuid4()),
+    )
+
+
+async def orchestrate(args) -> None:
+    """Top-level async orchestration for one-shot scan or live dashboard (CLI wrapper)."""
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.progress import (
+        BarColumn,
+        Progress,
+        SpinnerColumn,
+        TextColumn,
+        TimeElapsedColumn,
+    )
+    from rich.table import Table
+
+    from ..dashboard import run_live_dashboard
+    from ..history import get_scan_count, get_uptime_stats, save_results
+    from ..reporter import export_results, print_results_table, print_vpn_recommendations
+
+    console = Console()
     session_token = os.getenv("STAKE_SESSION_TOKEN")
 
     # --history: show stats and exit
     if args.history:
-        from rich.table import Table
-
         stats = get_uptime_stats()
         if not stats:
             console.print("[yellow]No history data yet. Run a scan first.[/]")
@@ -125,6 +205,16 @@ async def orchestrate(args: argparse.Namespace) -> None:
             )
         console.print(table)
         return
+
+    # Load config for live dashboard or legacy mode
+    yaml_config = load_config(args.config)
+    mirrors = parse_mirrors(yaml_config)
+    settings = yaml_config.get("settings", {})
+    nordvpn_config = yaml_config.get("nordvpn", {})
+
+    rounds = args.rounds or settings.get("ping_rounds", 3)
+    timeout = args.timeout or settings.get("timeout_seconds", 10)
+    concurrency = settings.get("concurrent_limit", 16)
 
     # Live dashboard — skip one-shot flow entirely
     if args.live:

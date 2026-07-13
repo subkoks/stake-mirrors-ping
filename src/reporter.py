@@ -9,6 +9,12 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.text import Text
 
+from .core.serializers import (
+    MirrorResultSchema,
+    ScanResultSchema,
+    ScanSummarySchema,
+    VPNRecommendationSchema,
+)
 from .models import PingResult, VPNRecommendation
 
 
@@ -161,40 +167,69 @@ def export_results(
 
     if fmt == "json":
         filepath = os.path.join(output_dir, f"results_{timestamp}.json")
-        data = {
-            "timestamp": datetime.now().isoformat(),
-            "mirrors": [],
-            "vpn_recommendations": [],
-        }
-        for r in sorted(results, key=lambda x: x.best_latency_ms or 99999):
-            data["mirrors"].append({
-                "domain": r.mirror.domain,
-                "url": r.mirror.url,
-                "is_up": r.is_up,
-                "ip": r.ip_address,
-                "location": r.server_location,
-                "dns_ms": r.dns_resolve_ms,
-                "tcp_ms": r.tcp_latency_ms,
-                "https_ms": r.https_latency_ms,
-                "api_ms": r.api_latency_ms,
-                "bet_ms": r.bet_latency_ms,
-                "best_ms": r.best_latency_ms,
-                "ssl_valid": r.ssl_valid,
-                "error": r.error,
-            })
+
+        # Build mirror schemas
+        sorted_results = sorted(results, key=lambda x: x.best_latency_ms or 99999)
+        mirror_schemas = [
+            MirrorResultSchema(
+                domain=r.mirror.domain,
+                url=r.mirror.url,
+                is_up=r.is_up,
+                ip_address=r.ip_address,
+                server_location=r.server_location,
+                server_country=r.server_country,
+                server_city=r.server_city,
+                server_lat=r.server_lat,
+                server_lon=r.server_lon,
+                dns_ms=r.dns_resolve_ms,
+                tcp_ms=r.tcp_latency_ms,
+                https_ms=r.https_latency_ms,
+                api_ms=r.api_latency_ms,
+                bet_ms=r.bet_latency_ms,
+                best_ms=r.best_latency_ms,
+                ssl_valid=r.ssl_valid,
+                http_status=r.http_status,
+                error=r.error,
+                trusted=r.mirror.trusted,
+            )
+            for r in sorted_results
+        ]
+
+        # Build VPN recommendation schemas
+        vpn_schemas = []
         for domain, recs in recommendations.items():
             for rec in recs:
-                data["vpn_recommendations"].append({
-                    "mirror": rec.mirror.domain,
-                    "vpn_server": rec.vpn_server.hostname,
-                    "vpn_city": rec.vpn_server.city,
-                    "vpn_country": rec.vpn_server.country,
-                    "distance_km": rec.distance_km,
-                    "mirror_latency_ms": rec.mirror_latency_ms,
-                    "estimated_total_ms": rec.estimated_latency_ms,
-                })
+                vpn_schemas.append(
+                    VPNRecommendationSchema(
+                        mirror_domain=rec.mirror.domain,
+                        vpn_hostname=rec.vpn_server.hostname,
+                        vpn_country=rec.vpn_server.country,
+                        vpn_city=rec.vpn_server.city,
+                        distance_km=rec.distance_km,
+                        mirror_latency_ms=rec.mirror_latency_ms,
+                        estimated_total_ms=rec.estimated_latency_ms,
+                    )
+                )
+
+        # Build scan summary
+        up_count = sum(1 for r in results if r.is_up)
+        fastest = sorted_results[0] if sorted_results and sorted_results[0].is_up else None
+        summary = ScanSummarySchema(
+            total_mirrors=len(results),
+            up_mirrors=up_count,
+            fastest_mirror=fastest.mirror.domain if fastest else None,
+            fastest_latency_ms=fastest.best_latency_ms if fastest else None,
+        )
+
+        # Build complete scan result
+        scan_result = ScanResultSchema(
+            scan=summary,
+            mirrors=mirror_schemas,
+            vpn_recommendations=vpn_schemas,
+        )
+
         with open(filepath, "w") as f:
-            json.dump(data, f, indent=2)
+            f.write(scan_result.model_dump_json())
 
     elif fmt == "csv":
         filepath = os.path.join(output_dir, f"results_{timestamp}.csv")

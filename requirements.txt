@@ -19,6 +19,7 @@ pycparser==3.0
 Pygments==2.20.0
 python-dotenv==1.2.2
 PyYAML==6.0.3
+pydantic>=2.0
 requests==2.34.2
 rich==15.0.0
 urllib3==2.7.0
