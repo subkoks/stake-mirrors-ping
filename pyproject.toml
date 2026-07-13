@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "stake-mirrors-ping"
 version = "1.0.0"
-description = "Find the fastest Stake.com mirror site + optimal NordVPN region for lowest latency"
+description = "Find the fastest Stake.com mirror site + optimal NordVPN region for lowest latency. CLI tool with desktop GUI."
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
 authors = [
     {name = "blackterminal", email = "subkoks@gmail.com"}
 ]
-keywords = ["stake", "latency", "mirror", "vpn", "nordvpn", "ping", "benchmark"]
+keywords = ["stake", "latency", "mirror", "vpn", "nordvpn", "ping", "benchmark", "gui", "electron"]
 dependencies = [
     "aiohttp>=3.9",
     "certifi>=2024.0",

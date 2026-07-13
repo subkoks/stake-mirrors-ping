@@ -5,8 +5,9 @@
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![GitHub stars](https://img.shields.io/github/stars/subkoks/stake-mirrors-ping.svg?style=social&label=Star)](https://github.com/subkoks/stake-mirrors-ping)
 [![GitHub issues](https://img.shields.io/github/issues/subkoks/stake-mirrors-ping.svg)](https://github.com/subkoks/stake-mirrors-ping/issues)
+[![Release](https://img.shields.io/github/v/release/subkoks/stake-mirrors-ping)](https://github.com/subkoks/stake-mirrors-ping/releases)
 
-Find the fastest Stake.com mirror site + optimal NordVPN region for lowest latency.
+Find the fastest Stake.com mirror site + optimal NordVPN region for lowest latency. CLI tool with desktop GUI.
 
 ## Features
 
@@ -18,8 +19,11 @@ Find the fastest Stake.com mirror site + optimal NordVPN region for lowest laten
 - **History tracking** — SQLite-based latency history with uptime stats
 - **Rich CLI** — color-coded sorted table, fastest on top
 - **Export** — save results to JSON or CSV
+- **Desktop GUI** — Electron-based cross-platform desktop application
 
 ## Quick Start
+
+### CLI
 
 ```bash
 # Activate venv
@@ -53,6 +57,20 @@ python -m src.main --skip-vpn --skip-geoip
 
 # Custom rounds and timeout
 python -m src.main --rounds 5 --timeout 15
+```
+
+### Desktop GUI
+
+```bash
+# Development mode
+cd gui
+npm install
+npm start
+
+# Production build (creates installers in gui/dist/)
+npm run build:mac    # macOS
+npm run build:win    # Windows
+npm run build:linux  # Linux
 ```
 
 ## Stake API Setup (Optional)
@@ -109,11 +127,47 @@ Edit `config.yaml` to add/remove mirrors, change settings, or modify NordVPN tar
 ## Tech Stack
 
 - Python 3.12+ with asyncio
+- Pydantic v2 (data validation and serialization)
 - curl_cffi (Chrome TLS fingerprint — bypasses Cloudflare)
 - aiohttp + aiodns (async HTTP/DNS)
 - rich (beautiful CLI output + live dashboard)
 - SQLite (history tracking)
 - PyYAML + python-dotenv (config)
+- Electron + Node.js (desktop GUI)
+- electron-builder (cross-platform packaging)
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Desktop GUI (Electron)                    │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│  │  Mirrors Tab │  │ Dashboard    │  │  History Tab │     │
+│  └──────────────┘  └──────────────┘  └──────────────┘     │
+└─────────────────────────────────────────────────────────────┘
+                           │ JSON-RPC
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Python API Bridge (src/core/api.py)             │
+└─────────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Core API (src/core/__init__.py)                 │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │ OrchestratorConfig | run_scan() | ScanResult        │   │
+│  │ Serializers (Pydantic) | HistoryDB                 │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     Core Services                            │
+│  ┌─────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐        │
+│  │ Pinger  │ │ GeoIP    │ │ Stake   │ │ NordVPN  │        │
+│  └─────────┘ └──────────┘ └──────────┘ └──────────┘        │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ## Codex CLI
 
