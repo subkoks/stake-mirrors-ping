@@ -80,7 +80,7 @@ jobs:
         pip install isort mypy ruff
 
     - name: Check code formatting with ruff
-      run: ruff format check src/ tests/
+      run: ruff format --check src/ tests/
 
     - name: Check import sorting with isort
       run: isort --check-only src/ tests/
