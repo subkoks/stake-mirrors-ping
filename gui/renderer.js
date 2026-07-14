@@ -197,8 +197,8 @@ function displayHistory(stats) {
 document.getElementById('save-settings-btn').addEventListener('click', async () => {
   try {
     const config = {
-      rounds: parseInt(document.getElementById('rounds').value),
-      timeout: parseFloat(document.getElementById('timeout').value),
+      ping_rounds: parseInt(document.getElementById('rounds').value),
+      timeout_seconds: parseFloat(document.getElementById('timeout').value),
     };
 
     const result = await window.electronAPI.updateConfig(config);
