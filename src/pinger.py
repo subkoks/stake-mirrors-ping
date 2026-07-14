@@ -46,10 +46,13 @@ async def https_ping(
             elapsed = (time.perf_counter() - start) * 1000
             return round(elapsed, 2), resp.status, True
     except ssl.SSLError:
+        # Certificate validation failed — explicitly mark as invalid.
         return None, None, False
     except Exception as e:
         logger.debug("https_ping failed for %s: %s", url, e)
-        return None, None, True
+        # Any other failure (timeout, connection error, DNS) means we never
+        # validated TLS, so ssl_valid must stay False rather than default True.
+        return None, None, False
     finally:
         if own_session:
             await session.close()  # type: ignore[union-attr]

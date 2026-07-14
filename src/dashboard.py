@@ -9,7 +9,7 @@ from rich.live import Live
 from rich.panel import Panel
 from rich.table import Table
 
-from .dns_resolver import enrich_with_geoip
+from .dns_resolver import _apply_geoip, enrich_with_geoip, geoip_lookup
 from .models import MirrorConfig, PingResult
 from .pinger import ping_all_mirrors
 from .reporter import fmt_ms, latency_color
@@ -199,17 +199,8 @@ async def run_live_dashboard(
                         and r.ip_address not in ip_to_geo
                     ):
                         # New IP, resolve it
-                        from .dns_resolver import geoip_lookup
-
                         geo = await geoip_lookup(r.ip_address)
-                        if geo.get("status") == "success":
-                            r.server_country = geo.get("country", "Unknown")
-                            r.server_city = geo.get("city", "Unknown")
-                            r.server_location = (
-                                f"{geo.get('city', '?')}, {geo.get('country', '?')}"
-                            )
-                            r.server_lat = geo.get("lat")
-                            r.server_lon = geo.get("lon")
+                        _apply_geoip(r, geo)
 
                 if api and session_token:
                     new_results = await enrich_with_api_tests(

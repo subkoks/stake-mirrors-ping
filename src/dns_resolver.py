@@ -1,10 +1,28 @@
+import asyncio
 import ipaddress
 
 import aiohttp
 
 from .models import PingResult
 
+# Provider is hardcoded here and intentionally HTTPS-only. The legacy
+# `geoip:` block in config.yaml was removed because it was never read and
+# referenced an insecure http:// endpoint.
 GEOIP_API = "https://api.ipquery.io/"
+
+
+def _apply_geoip(result: PingResult, geo: dict) -> None:
+    """Populate GeoIP fields from an ipquery.io response. No-op if absent."""
+    location = geo.get("location") or {}
+    if not location:
+        return
+    result.server_country = location.get("country", "Unknown")
+    result.server_city = location.get("city", "Unknown")
+    result.server_location = (
+        f"{location.get('city', '?')}, {location.get('country', '?')}"
+    )
+    result.server_lat = location.get("latitude")
+    result.server_lon = location.get("longitude")
 
 
 async def geoip_lookup(ip: str, session: aiohttp.ClientSession | None = None) -> dict:
@@ -31,19 +49,18 @@ async def geoip_lookup(ip: str, session: aiohttp.ClientSession | None = None) ->
             await session.close()  # type: ignore[union-attr]
 
 
-async def enrich_with_geoip(results: list[PingResult]) -> list[PingResult]:
-    """Add GeoIP data to all ping results."""
-    async with aiohttp.ClientSession() as session:
-        for result in results:
-            if result.ip_address:
+async def enrich_with_geoip(
+    results: list[PingResult], concurrency: int = 8
+) -> list[PingResult]:
+    """Add GeoIP data to all ping results (concurrent, rate-limit bounded)."""
+    sem = asyncio.Semaphore(concurrency)
+
+    async def _one(result: PingResult) -> None:
+        if result.ip_address:
+            async with sem:
                 geo = await geoip_lookup(result.ip_address, session)
-                location = geo.get("location", {})
-                if location:
-                    result.server_country = location.get("country", "Unknown")
-                    result.server_city = location.get("city", "Unknown")
-                    result.server_location = (
-                        f"{location.get('city', '?')}, {location.get('country', '?')}"
-                    )
-                    result.server_lat = location.get("latitude")
-                    result.server_lon = location.get("longitude")
+            _apply_geoip(result, geo)
+
+    async with aiohttp.ClientSession() as session:
+        await asyncio.gather(*(_one(r) for r in results))
     return results

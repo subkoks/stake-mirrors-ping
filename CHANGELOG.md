@@ -38,6 +38,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Type annotations in history.py, dns_resolver.py, dashboard.py
 - Config loading to handle empty YAML files safely
 - HistoryDB path handling for None values
+- **Live dashboard GeoIP refresh was dead code** — it checked a non-existent `status` field and read wrong coordinate keys (`lat`/`lon` vs `location.latitude`/`longitude`), so new IPs never got GeoIP in `--live`. Now uses the shared `_apply_geoip` helper.
+- **`ssl_valid` defaulted to `True` on any non-TLS failure** (timeout/connection error) — now correctly `False` since TLS was never validated.
+- **SQL injection** in `history.py` — `hours`/`days` were f-string-interpolated into the query modifier; now coerced to `int` with a non-negative bound check.
+- **Arbitrary file write / path traversal** in `core/api.py update-config` — `config_path` came from input and all keys were merged; now pinned to `config.yaml` and limited to an allowlist of scalar settings.
+- **Stored XSS** in GUI `renderer.js` — mirror/GeoIP/NordVPN/history data was injected via `innerHTML`; now built with `textContent`. Added CSP + renderer sandbox + navigation guard in `index.html`/`main.js`.
+- Removed dead/misleading `geoip:` config block (wrong provider, insecure `http://` URL) and unused `geoip2`/`requests` dependencies.
+- Concurrent GeoIP lookups (was 16 sequential calls).
+- `__import__('datetime')` in the watch loop replaced with a module import.
+
+### Added
+- Regression tests for GeoIP shape, SSL-validity semantics, and history SQL validation.
 
 ## [1.0.0] - 2026-02-21
 

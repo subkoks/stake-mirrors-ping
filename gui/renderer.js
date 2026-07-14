@@ -15,20 +15,23 @@ document.querySelectorAll('.tab').forEach(tab => {
 // Error display
 function showError(message) {
   const container = document.getElementById('error-container');
-  container.innerHTML = `<div class="error">${message}</div>`;
-  setTimeout(() => container.innerHTML = '', 5000);
+  const div = document.createElement('div');
+  div.className = 'error';
+  div.textContent = message;
+  container.replaceChildren(div);
+  setTimeout(() => container.replaceChildren(), 5000);
 }
 
 // Run scan
 document.getElementById('run-scan-btn').addEventListener('click', async () => {
   if (isScanning) return;
-  
+
   isScanning = true;
   document.getElementById('run-scan-btn').disabled = true;
   document.getElementById('stop-scan-btn').disabled = false;
   document.getElementById('scan-status').textContent = 'Scanning...';
   document.getElementById('mirrors-body').innerHTML = '<tr><td colspan="8" class="loading">Scanning mirrors...</td></tr>';
-  
+
   try {
     const config = {
       rounds: parseInt(document.getElementById('rounds').value) || 3,
@@ -38,9 +41,9 @@ document.getElementById('run-scan-btn').addEventListener('click', async () => {
       api_tests: document.getElementById('api-tests').checked,
       save_history: true,
     };
-    
+
     const result = await window.electronAPI.runScan(config);
-    
+
     if (result.success) {
       displayMirrors(result.mirrors);
       displayVPN(result.vpn_recommendations);
@@ -77,52 +80,59 @@ document.getElementById('stop-scan-btn').addEventListener('click', async () => {
 function displayMirrors(mirrors) {
   const tbody = document.getElementById('mirrors-body');
   tbody.innerHTML = '';
-  
+
   mirrors.sort((a, b) => (a.best_ms || 9999) - (b.best_ms || 9999));
-  
+
   mirrors.forEach((mirror, index) => {
     const row = document.createElement('tr');
-    row.innerHTML = `
-      <td>${mirror.domain}</td>
-      <td class="${mirror.is_up ? 'status-up' : 'status-down'}">${mirror.is_up ? '✓ UP' : '✗ DOWN'}</td>
-      <td>${mirror.ip_address || '—'}</td>
-      <td>${mirror.server_location || '—'}</td>
-      <td class="${getLatencyClass(mirror.tcp_ms)}">${formatMs(mirror.tcp_ms)}</td>
-      <td class="${getLatencyClass(mirror.https_ms)}">${formatMs(mirror.https_ms)}</td>
-      <td class="${getLatencyClass(mirror.api_ms)}">${formatMs(mirror.api_ms)}</td>
-      <td class="${getLatencyClass(mirror.best_ms)}"><strong>${formatMs(mirror.best_ms)}</strong></td>
-    `;
+    row.appendChild(cell(mirror.domain));
+    row.appendChild(cell(mirror.is_up ? '✓ UP' : '✗ DOWN', mirror.is_up ? 'status-up' : 'status-down'));
+    row.appendChild(cell(mirror.ip_address || '—'));
+    row.appendChild(cell(mirror.server_location || '—'));
+    row.appendChild(cell(formatMs(mirror.tcp_ms), getLatencyClass(mirror.tcp_ms)));
+    row.appendChild(cell(formatMs(mirror.https_ms), getLatencyClass(mirror.https_ms)));
+    row.appendChild(cell(formatMs(mirror.api_ms), getLatencyClass(mirror.api_ms)));
+    const best = document.createElement('td');
+    best.className = getLatencyClass(mirror.best_ms);
+    best.innerHTML = `<strong>${formatMs(mirror.best_ms)}</strong>`;
+    row.appendChild(best);
     tbody.appendChild(row);
   });
+}
+
+// Build a <td> with optional class and text (no innerHTML interpolation).
+function cell(text, className) {
+  const td = document.createElement('td');
+  if (className) td.className = className;
+  td.textContent = text;
+  return td;
 }
 
 // Display VPN recommendations
 function displayVPN(recommendations) {
   const tbody = document.getElementById('vpn-body');
   tbody.innerHTML = '';
-  
+
   const allRecs = [];
   for (const [domain, recs] of Object.entries(recommendations)) {
     if (recs && recs.length > 0) {
       allRecs.push({ domain, ...recs[0] });
     }
   }
-  
+
   allRecs.sort((a, b) => a.estimated_total_ms - b.estimated_total_ms);
-  
+
   if (allRecs.length === 0) {
     tbody.innerHTML = '<tr><td colspan="4" class="loading">No VPN recommendations available</td></tr>';
     return;
   }
-  
+
   allRecs.forEach(rec => {
     const row = document.createElement('tr');
-    row.innerHTML = `
-      <td>${rec.domain}</td>
-      <td>${rec.vpn_city}</td>
-      <td>${rec.vpn_country}</td>
-      <td class="${getLatencyClass(rec.estimated_total_ms)}">${formatMs(rec.estimated_total_ms)}</td>
-    `;
+    row.appendChild(cell(rec.domain));
+    row.appendChild(cell(rec.vpn_city));
+    row.appendChild(cell(rec.vpn_country));
+    row.appendChild(cell(formatMs(rec.estimated_total_ms), getLatencyClass(rec.estimated_total_ms)));
     tbody.appendChild(row);
   });
 }
@@ -132,14 +142,14 @@ function updateDashboard(result) {
   const mirrors = result.mirrors;
   const upMirrors = mirrors.filter(m => m.is_up);
   const latencies = upMirrors.map(m => m.best_ms).filter(Boolean);
-  
+
   document.getElementById('stat-total').textContent = mirrors.length;
   document.getElementById('stat-online').textContent = upMirrors.length;
-  
+
   if (latencies.length > 0) {
     const fastest = mirrors.find(m => m.is_up && m.best_ms);
     document.getElementById('stat-fastest').textContent = fastest ? formatMs(fastest.best_ms) : '—';
-    
+
     const avg = latencies.reduce((a, b) => a + b, 0) / latencies.length;
     document.getElementById('stat-avg').textContent = formatMs(avg);
   }
@@ -149,7 +159,7 @@ function updateDashboard(result) {
 document.getElementById('load-history-btn').addEventListener('click', async () => {
   try {
     const result = await window.electronAPI.getHistoryStats({ hours: 24 });
-    
+
     if (result.success) {
       displayHistory(result.stats);
     } else {
@@ -164,22 +174,21 @@ document.getElementById('load-history-btn').addEventListener('click', async () =
 function displayHistory(stats) {
   const tbody = document.getElementById('history-body');
   tbody.innerHTML = '';
-  
+
   if (stats.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6" class="loading">No history data available</td></tr>';
     return;
   }
-  
+
   stats.forEach(stat => {
     const row = document.createElement('tr');
-    row.innerHTML = `
-      <td>${stat.domain}</td>
-      <td class="${stat.uptime_pct >= 99 ? 'latency-good' : stat.uptime_pct >= 90 ? 'latency-warn' : 'latency-bad'}">${stat.uptime_pct}%</td>
-      <td>${formatMs(stat.avg_best_ms)}</td>
-      <td>${formatMs(stat.min_best_ms)}</td>
-      <td>${formatMs(stat.max_best_ms)}</td>
-      <td>${stat.total_checks}</td>
-    `;
+    row.appendChild(cell(stat.domain));
+    const uptimeClass = stat.uptime_pct >= 99 ? 'latency-good' : stat.uptime_pct >= 90 ? 'latency-warn' : 'latency-bad';
+    row.appendChild(cell(`${stat.uptime_pct}%`, uptimeClass));
+    row.appendChild(cell(formatMs(stat.avg_best_ms)));
+    row.appendChild(cell(formatMs(stat.min_best_ms)));
+    row.appendChild(cell(formatMs(stat.max_best_ms)));
+    row.appendChild(cell(String(stat.total_checks)));
     tbody.appendChild(row);
   });
 }
@@ -191,9 +200,9 @@ document.getElementById('save-settings-btn').addEventListener('click', async () 
       rounds: parseInt(document.getElementById('rounds').value),
       timeout: parseFloat(document.getElementById('timeout').value),
     };
-    
+
     const result = await window.electronAPI.updateConfig(config);
-    
+
     if (result.success) {
       alert('Settings saved successfully');
     } else {

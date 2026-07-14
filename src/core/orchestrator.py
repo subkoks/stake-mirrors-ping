@@ -4,12 +4,13 @@
 import asyncio
 import os
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 import yaml
 
 from ..dns_resolver import enrich_with_geoip
-from ..history import HistoryDB
+from ..history import DB_PATH, HistoryDB
 from ..models import MirrorConfig, PingResult, VPNRecommendation
 from ..nordvpn import get_vpn_recommendations
 from ..pinger import ping_all_mirrors
@@ -125,7 +126,10 @@ async def run_scan(config: OrchestratorConfig) -> ScanResult:
 
     # Save to history
     if config.save_history:
-        db_path = config.history_db_path or "history.db"
+        # Default to the project-root history.db so the GUI and CLI share the
+        # same database regardless of the working directory the GUI is launched
+        # from (e.g. gui/).
+        db_path = config.history_db_path or DB_PATH
         with HistoryDB(db_path) as db:
             db.save_results(results)
 
@@ -353,7 +357,7 @@ async def orchestrate(args) -> None:
                     )
                 print_results_table(
                     results,
-                    title=f"Stake Mirror Ping — {__import__('datetime').datetime.now().strftime('%H:%M:%S')}",
+                    title=f"Stake Mirror Ping — {datetime.now().strftime('%H:%M:%S')}",
                 )
         except KeyboardInterrupt:
             console.print("\n[dim]Stopped.[/]")
