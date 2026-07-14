@@ -6,11 +6,18 @@ import json
 import sys
 from pathlib import Path
 
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from core import OrchestratorConfig, run_scan
-from history import HistoryDB
+# Import the project's `src` package in a way that works both when this file is
+# imported as `src.core.api` (tests) and when run as a script
+# (`python src/core/api.py`, as the Electron GUI does). In script mode the
+# project root is added to sys.path so `src` resolves as a package; the
+# relative imports below then resolve correctly.
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+    from src.core import OrchestratorConfig, run_scan
+    from src.history import HistoryDB
+else:
+    from ..history import HistoryDB
+    from . import OrchestratorConfig, run_scan
 
 
 def print_json(data: dict) -> None:
@@ -88,7 +95,7 @@ def handle_get_history_stats(args_json: str) -> None:
 def handle_get_config() -> None:
     """Handle get-config command."""
     try:
-        from core import load_config
+        from src.core import load_config
 
         config = load_config()
         output = {
@@ -111,7 +118,7 @@ def handle_update_config(args_json: str) -> None:
     """
     import yaml
 
-    from core import load_config
+    from src.core import load_config
 
     new_config = json.loads(args_json)
     # Reject any attempt to redirect the write target.
@@ -126,20 +133,33 @@ def handle_update_config(args_json: str) -> None:
         sys.exit(1)
 
     config_path = "config.yaml"
-    # Allowlist of scalar settings that the GUI may change.
-    allowed_keys = {"ping_rounds", "timeout_seconds", "concurrent_limit"}
-
     existing = load_config(config_path)
-    settings = existing.setdefault("settings", {})
-    for key, value in new_config.items():
-        if key in allowed_keys:
-            settings[key] = value
+    _merge_config_update(existing, new_config)
 
     with open(config_path, "w") as f:
         yaml.dump(existing, f, default_flow_style=False)
 
     output = {"success": True}
     print_json(output)
+
+
+# Allowlist of scalar settings that the GUI may change. Nested structures
+# (mirrors, nordvpn) are intentionally excluded to prevent injecting content.
+ALLOWED_CONFIG_KEYS = {"ping_rounds", "timeout_seconds", "concurrent_limit"}
+
+
+def _merge_config_update(existing: dict, new_config: dict) -> dict:
+    """Apply a GUI config update to an existing config dict (pure, no I/O).
+
+    Only keys in ``ALLOWED_CONFIG_KEYS`` are written, and they are placed under
+    the ``settings`` mapping. Anything else (including ``config_path`` and
+    nested structures) is ignored. Returns the mutated ``existing`` dict.
+    """
+    settings = existing.setdefault("settings", {})
+    for key, value in new_config.items():
+        if key in ALLOWED_CONFIG_KEYS:
+            settings[key] = value
+    return existing
 
 
 def main() -> None:
