@@ -3,13 +3,16 @@ repos:
     rev: v0.15.21
     hooks:
       - id: ruff
+        files: \.py$
         args: [--fix, --exit-non-zero-on-fix]
       - id: ruff-format
+        files: \.py$
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v2.3.0
     hooks:
       - id: mypy
+        files: \.py$
         additional_dependencies: [pydantic>=2.0]
         args: [--ignore-missing-imports]
 

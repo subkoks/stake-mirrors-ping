@@ -116,10 +116,6 @@ def handle_update_config(args_json: str) -> None:
     Only known scalar settings keys are merged; nested structures (mirrors,
     nordvpn, settings) are ignored to avoid injecting untrusted content.
     """
-    import yaml
-
-    from src.core import load_config
-
     new_config = json.loads(args_json)
     # Reject any attempt to redirect the write target.
     requested_path = new_config.get("config_path")
@@ -133,11 +129,18 @@ def handle_update_config(args_json: str) -> None:
         sys.exit(1)
 
     config_path = "config.yaml"
-    existing = load_config(config_path)
-    _merge_config_update(existing, new_config)
+    # Resolve relative to project root so the GUI (spawned from gui/) writes the
+    # correct file. load_config already falls back to the project root for reads.
+    project_root = Path(__file__).parent.parent.parent
+    resolved_path = project_root / config_path
 
-    with open(config_path, "w") as f:
-        yaml.dump(existing, f, default_flow_style=False)
+    # Patch only the allowed scalar settings, preserving comments, key order,
+    # and the rest of the file. Rewriting the whole YAML (yaml.dump) would strip
+    # the security notes and reorder keys, so we edit the `settings:` block
+    # line-by-line instead.
+    updates = {k: new_config[k] for k in ALLOWED_CONFIG_KEYS if k in new_config}
+    if updates:
+        _patch_settings_block(resolved_path, updates)
 
     output = {"success": True}
     print_json(output)
@@ -146,6 +149,46 @@ def handle_update_config(args_json: str) -> None:
 # Allowlist of scalar settings that the GUI may change. Nested structures
 # (mirrors, nordvpn) are intentionally excluded to prevent injecting content.
 ALLOWED_CONFIG_KEYS = {"ping_rounds", "timeout_seconds", "concurrent_limit"}
+
+
+def _patch_settings_block(path: Path, updates: dict) -> None:
+    """Patch scalar settings inside the ``settings:`` block of ``path`` in place.
+
+    Only lines matching an allowed key (indented under ``settings:``) are
+    rewritten; comments, ordering, and all other content are preserved. The
+    file is rewritten only if an actual change was made.
+    """
+    text = path.read_text()
+    lines = text.splitlines()
+    out: list[str] = []
+    changed = False
+    in_settings = False
+    for line in lines:
+        stripped = line.strip()
+        if not in_settings:
+            if stripped == "settings:":
+                in_settings = True
+            out.append(line)
+            continue
+        # A less-indented (or non-indented) line ends the settings block.
+        if line and not line[0].isspace():
+            in_settings = False
+            out.append(line)
+            continue
+        matched = False
+        for key, value in updates.items():
+            if stripped.startswith(f"{key}:"):
+                indent = line[: len(line) - len(line.lstrip())]
+                new_line = f"{indent}{key}: {value}"
+                if new_line != line:
+                    changed = True
+                out.append(new_line)
+                matched = True
+                break
+        if not matched:
+            out.append(line)
+    if changed:
+        path.write_text("\n".join(out) + "\n")
 
 
 def _merge_config_update(existing: dict, new_config: dict) -> dict:
