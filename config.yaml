@@ -79,7 +79,3 @@ nordvpn:
     - "Slovenia"
     - "Spain"
     - "Italy"
-
-geoip:
-  provider: "ip-api"
-  api_url: "http://ip-api.com/json/"

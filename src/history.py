@@ -132,6 +132,11 @@ class HistoryDB:
         """Get history for a mirror over the last N days."""
         assert self.conn is not None
         self.conn.row_factory = sqlite3.Row
+        # Validate `days` is a non-negative int before building the modifier.
+        # SQLite's datetime() interval must be a literal, not a bound param.
+        days = int(days)
+        if days < 0:
+            raise ValueError("days must be >= 0")
         rows = self.conn.execute(
             """
             SELECT * FROM ping_history
@@ -181,7 +186,9 @@ class HistoryDB:
             FROM ping_history
             WHERE timestamp >= datetime('now', ?)
         """
-        params: list = [f"-{hours} hours"]
+        params: list = [f"-{int(hours)} hours"]
+        if int(hours) < 0:
+            raise ValueError("hours must be >= 0")
         if domain:
             query += " AND domain = ?"
             params.append(domain)

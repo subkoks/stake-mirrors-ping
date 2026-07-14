@@ -102,30 +102,44 @@ def handle_get_config() -> None:
 
 
 def handle_update_config(args_json: str) -> None:
-    """Handle update-config command."""
-    try:
-        import yaml
+    """Handle update-config command.
 
-        from core import load_config
+    Security: the config path is restricted to the project-root config.yaml and
+    cannot be pointed at an arbitrary file (path traversal / arbitrary write).
+    Only known scalar settings keys are merged; nested structures (mirrors,
+    nordvpn, settings) are ignored to avoid injecting untrusted content.
+    """
+    import yaml
 
-        new_config = json.loads(args_json)
-        config_path = new_config.get("config_path", "config.yaml")
+    from core import load_config
 
-        # Load existing config and merge
-        existing = load_config(config_path)
-        for key, value in new_config.items():
-            if key != "config_path":
-                existing[key] = value
-
-        # Save back
-        with open(config_path, "w") as f:
-            yaml.dump(existing, f, default_flow_style=False)
-
-        output = {"success": True}
-        print_json(output)
-    except Exception as e:
-        print_json({"success": False, "error": str(e)})
+    new_config = json.loads(args_json)
+    # Reject any attempt to redirect the write target.
+    requested_path = new_config.get("config_path")
+    if requested_path is not None and requested_path != "config.yaml":
+        print_json(
+            {
+                "success": False,
+                "error": "Only the project config.yaml can be updated",
+            }
+        )
         sys.exit(1)
+
+    config_path = "config.yaml"
+    # Allowlist of scalar settings that the GUI may change.
+    allowed_keys = {"ping_rounds", "timeout_seconds", "concurrent_limit"}
+
+    existing = load_config(config_path)
+    settings = existing.setdefault("settings", {})
+    for key, value in new_config.items():
+        if key in allowed_keys:
+            settings[key] = value
+
+    with open(config_path, "w") as f:
+        yaml.dump(existing, f, default_flow_style=False)
+
+    output = {"success": True}
+    print_json(output)
 
 
 def main() -> None:

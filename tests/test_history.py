@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from src.history import (
+    HistoryDB,
     get_domain_history,
     get_latest_scan,
     get_scan_count,
@@ -107,9 +108,39 @@ class TestGetUptimeStats:
         assert stats["stake.com"]["uptime_pct"] == 100.0
         assert stats["stake.bet"]["uptime_pct"] == 0.0
 
+    def test_negative_hours_rejected(self, tmp_db: str) -> None:
+        with pytest.raises(ValueError):
+            get_uptime_stats(hours=-1, db_path=tmp_db)
+
+    def test_string_hours_coerced(
+        self, tmp_db: str, sample_results: list[PingResult]
+    ) -> None:
+        def test_string_hours_coerced(
+            self, tmp_db: str, sample_results: list[PingResult]
+        ) -> None:
+            # A non-int hours value must be coerced to int, not interpolated raw.
+            save_results(sample_results, db_path=tmp_db)
+            stats = get_uptime_stats(hours=int("24"), db_path=tmp_db)  # type: ignore[arg-type]
+            assert "stake.com" in stats
+
     def test_returns_empty_when_no_data(self, tmp_db: str) -> None:
         stats = get_uptime_stats(db_path=tmp_db)
         assert stats == {}
+
+
+class TestGetMirrorHistory:
+    def test_negative_days_rejected(self, tmp_db: str) -> None:
+        with pytest.raises(ValueError):
+            with HistoryDB(tmp_db) as db:
+                db.get_mirror_history("stake.com", days=-1)
+
+    def test_string_days_coerced(
+        self, tmp_db: str, sample_results: list[PingResult]
+    ) -> None:
+        save_results(sample_results, db_path=tmp_db)
+        with HistoryDB(tmp_db) as db:
+            rows = db.get_mirror_history("stake.com", days=int("7"))  # type: ignore[arg-type]
+        assert len(rows) == 1
 
 
 class TestGetScanCount:
