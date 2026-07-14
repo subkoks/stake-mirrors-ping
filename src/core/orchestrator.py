@@ -35,10 +35,20 @@ class OrchestratorConfig:
 
 
 def load_config(config_path: str = "config.yaml") -> dict:
-    """Load configuration from YAML file."""
+    """Load configuration from YAML file.
+
+    Resolves ``config_path`` relative to the project root (parent of ``src/``)
+    when the file is not found relative to the current working directory. This
+    keeps the GUI working when it spawns the bridge from the ``gui/`` subfolder.
+    """
     path = Path(config_path)
     if not path.exists():
-        raise FileNotFoundError(f"Config file not found: {config_path}")
+        project_root = Path(__file__).parent.parent.parent
+        alt = project_root / config_path
+        if alt.exists():
+            path = alt
+        else:
+            raise FileNotFoundError(f"Config file not found: {config_path}")
     with open(path) as f:
         return yaml.safe_load(f) or {}
 
