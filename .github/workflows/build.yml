@@ -42,7 +42,7 @@ jobs:
         run: npm run build:linux
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: desktop-app-${{ matrix.os }}
           path: gui/dist/*
