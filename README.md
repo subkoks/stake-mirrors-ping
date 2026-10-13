@@ -1,27 +1,19 @@
-# Stake Mirrors Ping 🏓
+<h1>
+  <picture>
+    <source media="(max-width: 600px)" srcset="assets/readme/hero-mobile.svg">
+    <img src="assets/readme/hero.svg" width="100%" alt="Stake mirrors ping — BLACK.TERMINAL">
+  </picture>
+</h1>
 
-[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-[![GitHub stars](https://img.shields.io/github/stars/subkoks/stake-mirrors-ping.svg?style=social&label=Star)](https://github.com/subkoks/stake-mirrors-ping)
-[![GitHub issues](https://img.shields.io/github/issues/subkoks/stake-mirrors-ping.svg)](https://github.com/subkoks/stake-mirrors-ping/issues)
+**stake-mirrors-ping** measures Stake mirror latency through a Python CLI and Electron desktop GUI, with NordVPN region recommendations, scan history, and JSON/CSV export.
+
+**[Quick start](#quick-start)** · [Features](#features) · [CLI options](#cli-options) · [Configuration](#config) · [Architecture](#architecture)
+
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-393632?labelColor=1B1A18)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-393632?labelColor=1B1A18)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/subkoks/stake-mirrors-ping)](https://github.com/subkoks/stake-mirrors-ping/releases)
 
-Find the fastest Stake.com mirror site + optimal NordVPN region for lowest latency. CLI tool with desktop GUI.
-
-## Features
-
-- **16 Stake mirrors** tested concurrently (TCP + HTTPS + DNS)
-- **GeoIP lookup** — see where each mirror's server is located
-- **NordVPN recommendations** — best EU server city per mirror
-- **Stake API integration** — GraphQL latency via `curl_cffi` (Chrome TLS fingerprint bypasses Cloudflare)
-- **Live dashboard** — real-time auto-refreshing terminal UI with `rich.live`
-- **History tracking** — SQLite-based latency history with uptime stats
-- **Rich CLI** — color-coded sorted table, fastest on top
-- **Export** — save results to JSON or CSV
-- **Desktop GUI** — Electron-based cross-platform desktop application
-
-## Quick Start
+## Quick start
 
 ### CLI
 
@@ -73,7 +65,19 @@ npm run build:win    # Windows
 npm run build:linux  # Linux
 ```
 
-## Stake API Setup (Optional)
+## Features
+
+- **16 Stake mirrors** tested concurrently (TCP + HTTPS + DNS)
+- **GeoIP lookup** — see where each mirror's server is located
+- **NordVPN recommendations** — best EU server city per mirror
+- **Stake API integration** — GraphQL latency via `curl_cffi` (Chrome TLS fingerprint bypasses Cloudflare)
+- **Live dashboard** — real-time auto-refreshing terminal UI with `rich.live`
+- **History tracking** — SQLite-based latency history with uptime stats
+- **Rich CLI** — color-coded sorted table, fastest on top
+- **Export** — save results to JSON or CSV
+- **Desktop GUI** — Electron-based cross-platform desktop application
+
+## Stake API setup (optional)
 
 1. Open Stake.com in your browser
 2. Open DevTools (F12) → Application → Cookies
@@ -86,7 +90,7 @@ npm run build:linux  # Linux
 
 5. Run with `--api` flag
 
-## CLI Options
+## CLI options
 
 | Flag                | Description                               |
 | ------------------- | ----------------------------------------- |
@@ -104,7 +108,7 @@ npm run build:linux  # Linux
 | `--history`         | Show uptime stats from history.db         |
 | `--no-history`      | Don't save results to history.db          |
 
-## Output Example
+## Output example
 
 ```text
 ┌───┬──────────────┬────────┬─────────────────┬──────────────────┬────────┬────────┬────────┬───────┐
@@ -123,18 +127,6 @@ npm run build:linux  # Linux
 ## Config
 
 Edit `config.yaml` to add/remove mirrors, change settings, or modify NordVPN target regions.
-
-## Tech Stack
-
-- Python 3.12+ with asyncio
-- Pydantic v2 (data validation and serialization)
-- curl_cffi (Chrome TLS fingerprint — bypasses Cloudflare)
-- aiohttp + aiodns (async HTTP/DNS)
-- rich (beautiful CLI output + live dashboard)
-- SQLite (history tracking)
-- PyYAML + python-dotenv (config)
-- Electron + Node.js (desktop GUI)
-- electron-builder (cross-platform packaging)
 
 ## Architecture
 
@@ -169,6 +161,22 @@ Edit `config.yaml` to add/remove mirrors, change settings, or modify NordVPN tar
 └─────────────────────────────────────────────────────────────┘
 ```
 
+## Tech stack
+
+- Python 3.12+ with asyncio
+- Pydantic v2 (data validation and serialization)
+- curl_cffi (Chrome TLS fingerprint — bypasses Cloudflare)
+- aiohttp + aiodns (async HTTP/DNS)
+- rich (beautiful CLI output + live dashboard)
+- SQLite (history tracking)
+- PyYAML + python-dotenv (config)
+- Electron + Node.js (desktop GUI)
+- electron-builder (cross-platform packaging)
+
 ## Codex CLI
 
 Codex CLI can use the repo root `AGENTS.md` and the tracked `.codex/config.toml` defaults in this workspace.
+
+---
+
+<img src="assets/readme/dot.svg" width="12" height="12" alt=""> **BLACK.TERMINAL** · [MIT License](LICENSE) · [GitHub](https://github.com/subkoks)
