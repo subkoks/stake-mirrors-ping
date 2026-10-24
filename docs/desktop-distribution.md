@@ -6,7 +6,7 @@ Status: **2.1.0 candidate; not published**. v2.0.0 remains unchanged and require
 
 Electron 45.0.0 hosts the sandboxed renderer. A native PyInstaller 6.22.3 one-folder executable includes CPython 3.13.16, the locked application dependencies, CFFI/curl, Pydantic native extensions, SQLite, and CA certificates. Build-only hooks are pinned at 2026.9 in the `desktop` dependency group. Node 22.23.1 and uv 0.12.5 are CI tools, not end-user requirements.
 
-Each backend is built natively on the same OS and architecture as its installer. The builder rejects mismatched OS, architecture, fixture flavor, or package version. `resources/backend/provenance.json` records the Python version, dependency lock digest, build environment, and collected-file hashes. License notices are copied alongside the backend. Hashes establish build-file integrity, not publisher authentication; signing changes native binary bytes and requires final-file checksums afterward.
+Each backend is built natively on the same OS and architecture as its installer. The builder rejects mismatched OS, architecture, fixture flavor, or package version. `resources/backend/provenance.json` records the Python version, dependency lock digest, build environment, and collected-file hashes. License notices are copied alongside the backend. The builder verifies every recorded file hash before packaging; startup uses a bounded health check instead of hashing the entire runtime on each launch. Hashes establish build-file integrity, not publisher authentication; signing changes native binary bytes and requires final-file checksums afterward.
 
 Production bundles contain no fixture entry point. Test applications are explicitly marked through package metadata and use a separately frozen fixture backend. Packaged startup accepts the corresponding flavor only. Production never reads `python-path.txt` or `STAKE_PYTHON`, never falls back to PATH, and never installs/downloads runtime code. Development launches retain explicit interpreter discovery.
 
@@ -19,11 +19,11 @@ The backend's `health` command exercises frozen-runtime detection, architecture,
 | Windows x64 | Windows 10/11 (Electron floor) | Windows Server 2022 runner: NSIS silent install into a disposable Unicode path, installed-app launch, interactions; this does not establish manual Windows 10/11 desktop acceptance |
 | macOS Intel | macOS 13+ | Native Intel runner; mount DMG read-only, copy into disposable Unicode path, launch and interact |
 | macOS Apple Silicon | macOS 13+ | Native arm64 runner; same installed-app checks |
-| Linux x64 | Ubuntu 22.04/24.04 desktop, glibc 2.35+ | Native Ubuntu 22.04 build, DEB extraction, Xvfb interactions; clean Ubuntu containers assert no Python and launch the production GUI with an external test driver |
+| Linux x64 | Ubuntu 22.04/24.04 desktop, glibc 2.35+ | Native Ubuntu 22.04 build, DEB extraction, Xvfb interactions; clean Ubuntu containers install the DEB, assert no Python/Node/Git, and launch the production GUI with an external test driver |
 
 Electron 44+ requires macOS 13. Native backend dependencies may impose additional requirements; candidate qualification must inspect/link-test those artifacts before confirming compatibility. Running a newer macOS CI image does not prove macOS 13 operation. Linux is not universally portable: build against the oldest supported glibc and validate actual dependencies. RPM is generated but is not qualified for a Fedora baseline until installer validation exists. AppImage generation does not prove FUSE integration on every desktop.
 
-Tests distinguish built, launched, interaction-tested, installer-tested, and manual validation. The Linux container uses `--no-sandbox` only for disposable root automation; production app configuration keeps renderer sandboxing enabled. No user is instructed to disable OS protections.
+Tests distinguish built, launched, interaction-tested, installer-tested, and manual validation. Host-runner Linux automation uses `--no-sandbox` only for isolated test launches. Clean Ubuntu acceptance installs the DEB, runs as an unprivileged user, and leaves Electron sandboxing enabled. Its container receives namespace capabilities only to permit sandbox creation; these are CI settings, not user instructions. No user is instructed to disable OS protections.
 
 ## User data and upgrade behavior
 

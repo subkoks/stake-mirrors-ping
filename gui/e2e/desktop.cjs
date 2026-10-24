@@ -18,7 +18,7 @@ function gone(pid) { try { process.kill(pid, 0); return false; } catch { return 
 async function check(name, action) { await action(); console.log('PASS ' + name); passed++; }
 async function launch() {
   const started = Date.now();
-  app = await electron.launch({ executablePath: executable, args: [`--user-data-dir=${data}`, ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], env, cwd: base, timeout: 45000 });
+  app = await electron.launch({ executablePath: executable, args: [`--user-data-dir=${data}`, ...(process.platform === 'linux' && process.env.STAKE_E2E_SANDBOX !== '1' ? ['--no-sandbox'] : [])], env, cwd: base, timeout: 45000 });
   page = await app.firstWindow(); page.on('pageerror', error => errors.push(error.message));
   await page.locator('#run-scan-btn:enabled').waitFor({ timeout: 30000 });
   console.log(`READY_MS ${Date.now() - started}`);

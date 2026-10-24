@@ -27,6 +27,16 @@ def main() -> None:
         if p.is_file()
         and p.suffix in (".dmg", ".zip", ".exe", ".AppImage", ".deb", ".rpm")
     }
+    installers = [
+        p
+        for p in args.directory.rglob("*")
+        if p.is_file()
+        and p.suffix in (".dmg", ".zip", ".exe", ".AppImage", ".deb", ".rpm")
+    ]
+    if len(installers) != len(actual) or any(
+        p.parent != args.directory for p in installers
+    ):
+        raise SystemExit("Nested or duplicate candidate filenames")
     if set(actual) != expected:
         raise SystemExit(
             f"Unexpected release inventory. Missing: {expected - set(actual)}; extra: {set(actual) - expected}"
@@ -38,7 +48,10 @@ def main() -> None:
         if file.stat().st_size < 1024 * 1024:
             raise SystemExit(f"Installer is unexpectedly small: {name}")
         with file.open("rb") as stream:
-            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+            hasher = hashlib.sha256()
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                hasher.update(chunk)
+            digest = hasher.hexdigest()
         lines.append(f"{digest}  {name}")
         manifest.append({"name": name, "size": file.stat().st_size, "sha256": digest})
     (args.directory / "SHA256SUMS.txt").write_text("\n".join(lines) + "\n")

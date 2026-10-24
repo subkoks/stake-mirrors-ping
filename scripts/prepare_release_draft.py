@@ -72,7 +72,10 @@ def main() -> None:
                 raise SystemExit("Unsafe candidate filename")
             file = directory / name
             with file.open("rb") as stream:
-                digest = hashlib.file_digest(stream, "sha256").hexdigest()
+                hasher = hashlib.sha256()
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    hasher.update(chunk)
+                digest = hasher.hexdigest()
             if digest != item["sha256"] or file.stat().st_size != item["size"]:
                 raise SystemExit("Candidate checksum/size mismatch")
         notes = directory / "notes.md"

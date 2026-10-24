@@ -82,7 +82,14 @@ jobs:
           set -euo pipefail
           for baseline in 22.04 24.04; do
             docker build --build-arg BASE=ubuntu:$baseline -t stake-clean:$baseline -f packaging/clean-linux.Dockerfile .
-            docker run --rm -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE:ro" -v "$RUNNER_TEMP:$RUNNER_TEMP:ro" -v "$(command -v node):/node:ro" -e STAKE_DESKTOP_EXECUTABLE="$STAKE_DESKTOP_EXECUTABLE" -e STAKE_E2E_OUTPUT=/tmp -e PATH=/usr/bin:/bin -e STAKE_E2E_SCRIPT="$GITHUB_WORKSPACE/gui/e2e/desktop.cjs" stake-clean:$baseline bash -c '! command -v python3 && ! command -v python && xvfb-run -a /node "$STAKE_E2E_SCRIPT"'
+            docker run --rm --cap-add=SYS_ADMIN --security-opt seccomp=unconfined -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE:ro" -v "$(command -v node):/node:ro" -e STAKE_PACKAGE_DIR="$GITHUB_WORKSPACE/gui/dist" -e STAKE_E2E_SCRIPT="$GITHUB_WORKSPACE/gui/e2e/desktop.cjs" stake-clean:$baseline bash -c '
+              set -euo pipefail
+              apt-get update
+              apt-get install -y --no-install-recommends "$STAKE_PACKAGE_DIR/"*.deb
+              ! command -v python3 && ! command -v python && ! command -v git && ! command -v node
+              useradd -m -u 1000 desktoptest
+              runuser -u desktoptest -- env STAKE_E2E_SANDBOX=1 STAKE_E2E_OUTPUT=/tmp STAKE_DESKTOP_EXECUTABLE="/opt/Stake Mirrors Ping/stake-mirrors-ping-gui" xvfb-run -a /node "$STAKE_E2E_SCRIPT"
+            '
           done
       - name: Build isolated fixture backend and test application
         shell: bash

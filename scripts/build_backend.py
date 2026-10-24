@@ -4,7 +4,9 @@ import argparse
 import hashlib
 import importlib.metadata
 import json
+import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -19,6 +21,10 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--fixture", action="store_true")
     args = parser.parse_args()
+    if platform.python_version() != "3.13.16":
+        raise SystemExit(
+            "Build with uv run --python 3.13.16 --locked --group desktop python scripts/build_backend.py"
+        )
     arch = {"AMD64": "x64", "x86_64": "x64", "arm64": "arm64", "aarch64": "arm64"}[
         platform.machine()
     ]
@@ -69,6 +75,12 @@ def main() -> None:
     assert response["frozen"] and response["architecture"] == arch, response
     notices = backend / "licenses"
     notices.mkdir(exist_ok=True)
+    shutil.copytree(
+        ROOT / "packaging/vendor-licenses", notices / "native", dirs_exist_ok=True
+    )
+    shutil.copyfile(
+        ROOT / "packaging/vendor-license-sources.txt", notices / "native-sources.txt"
+    )
     packages = []
     for dist in importlib.metadata.distributions():
         name = dist.metadata["Name"]
@@ -95,6 +107,33 @@ def main() -> None:
         timeout=30,
     ) as response_file:
         (notices / "PYTHON-LICENSE.txt").write_bytes(response_file.read())
+    requirements = set()
+    for binary in backend.rglob("*"):
+        if not binary.is_file() or binary.is_symlink():
+            continue
+        with binary.open("rb") as stream:
+            magic = stream.read(4)
+        if sys.platform == "linux" and magic == b"\x7fELF":
+            info = subprocess.check_output(
+                ["readelf", "--version-info", str(binary)], text=True
+            )
+            for value in re.findall(r"GLIBC_(\d+\.\d+)", info):
+                requirements.add(value)
+                if tuple(map(int, value.split("."))) > (2, 35):
+                    raise SystemExit(
+                        f"Backend exceeds Ubuntu 22.04 glibc baseline: {binary.name} GLIBC_{value}"
+                    )
+        elif sys.platform == "darwin" and magic in (
+            b"\xcf\xfa\xed\xfe",
+            b"\xca\xfe\xba\xbe",
+        ):
+            info = subprocess.check_output(["otool", "-l", str(binary)], text=True)
+            for value in re.findall(r"(?:minos|\bversion) (\d+\.\d+(?:\.\d+)?)", info):
+                requirements.add(value)
+                if tuple(map(int, value.split(".")[:2])) > (13, 0):
+                    raise SystemExit(
+                        f"Backend exceeds macOS 13 deployment baseline: {binary.name} {value}"
+                    )
     files = {
         str(p.relative_to(backend)): hashlib.sha256(p.read_bytes()).hexdigest()
         for p in sorted(backend.rglob("*"))
@@ -105,6 +144,10 @@ def main() -> None:
         "version": importlib.metadata.version("stake-mirrors-ping"),
         "target": target,
         "python": platform.python_version(),
+        "python_distribution": "actions/python-versions via pinned setup-python"
+        if os.environ.get("GITHUB_ACTIONS")
+        else "local Python build (see interpreter version and embedded binary hashes)",
+        "native_abi_versions": sorted(requirements),
         "fixture": args.fixture,
         "lock_sha256": hashlib.sha256((ROOT / "uv.lock").read_bytes()).hexdigest(),
         "build_environment": sorted(packages, key=lambda p: p["name"]),
