@@ -66,12 +66,54 @@ npm run build:win    # Windows
 npm run build:linux  # Linux
 ```
 
-Packaged desktop apps require an external Python 3.12+ environment with
-`requirements.txt` installed; Python is not bundled. In development the project
-`.venv` is preferred. Packaged apps use `process.resourcesPath` for their code
-and keep writable config/history in Electron's per-user application data directory.
-Their first launch copies the bundled canonical configuration; existing user
-configuration is preserved. Installers are unsigned unless separately configured.
+Packaged desktop apps require **Python 3.12+ and the versions in
+`requirements.txt` installed separately**. Python is not bundled or downloaded.
+The GUI checks the interpreter version, imports, and dependency minimums before
+enabling scans. Missing/incompatible Python shows installation guidance in the
+window.
+
+For a Finder-launched macOS app, create a separate environment without changing
+your system Python. For example, with the app installed in `/Applications`:
+
+```sh
+python3 -m venv "$HOME/.local/share/stake-mirrors-ping/python"
+"$HOME/.local/share/stake-mirrors-ping/python/bin/python" -m pip install -r "/Applications/Stake Mirrors Ping.app/Contents/Resources/requirements.txt"
+mkdir -p "$HOME/Library/Application Support/Stake Mirrors Ping"
+printf '%s\n' "$HOME/.local/share/stake-mirrors-ping/python/bin/python" > "$HOME/Library/Application Support/Stake Mirrors Ping/python-path.txt"
+```
+
+Restart the app after setting the executable path. The error message shows the
+actual preference-file location for your platform. `STAKE_PYTHON` is an alternative
+absolute executable-path override for terminal launches. An explicit choice is
+validated and never silently replaced. Without one, development prefers the
+project `.venv`; packaged macOS apps try Homebrew's standard locations and then
+`python3` on PATH (Windows tries `python`). A GUI launch does not inherit an
+activated terminal environment reliably.
+
+Code/resources live under `process.resourcesPath`; writable configuration/history
+live in Electron's per-user application data directory. First launch copies the
+bundled canonical configuration, preserving an existing user configuration.
+`--user-data-dir=/absolute/directory` selects an isolated data directory for
+verification. macOS builds require **macOS 12 or newer** (older macOS versions supported by
+the former Electron runtime are no longer supported). Installers are **unsigned
+and not notarized**. Node **22.12.0+ within
+22.x** is required for development/packaging; CI pins 22.23.1.
+
+Developer-only offline rendered checks:
+
+```sh
+cd gui
+npm ci --omit=optional --registry=https://registry.npmjs.org
+npm test
+npm run test:electron
+npm run build:check -- --publish never
+npm run test:electron:packaged  # macOS app built above
+```
+
+These checks use temporary data, controlled Python environments and mocked scans.
+Playwright is not included in the packaged application. See the
+[security upgrade evidence](docs/gui-security-upgrade.md) for version selection,
+advisory remediation and compatibility notes.
 
 ## Features
 

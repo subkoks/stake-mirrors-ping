@@ -136,3 +136,38 @@ def test_request_errors_have_local_classification(exception, expected):
         https_ping("https://example.com", session=session, errors=errors)
     ) == (None, None, False)
     assert errors == [expected]
+
+
+def test_csv_export_preserves_status_and_missing_timings(tmp_path):
+    import csv
+
+    from src.reporter import export_results
+
+    def result(domain, latency, responding, status):
+        return PingResult(
+            MirrorConfig(domain, f"https://{domain}"),
+            https_latency_ms=latency,
+            is_up=responding,
+            reachability=status,
+        )
+
+    export_results(
+        [
+            result("blocked.example", 1, False, "blocked_or_challenged"),
+            result("zero.example", 0, True, "http_responding"),
+            result("slow.example", 20, True, "http_responding"),
+        ],
+        {},
+        fmt="csv",
+        output_dir=str(tmp_path),
+    )
+    with next(tmp_path.glob("*.csv")).open(newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    assert [row["Domain"] for row in rows] == [
+        "zero.example",
+        "slow.example",
+        "blocked.example",
+    ]
+    assert rows[-1]["Status"] == "blocked_or_challenged"
+    assert rows[-1]["Best_ms"] == ""
+    assert rows[0]["Best_ms"] == "0"

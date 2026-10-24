@@ -1,91 +1,82 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
-const path = require('path');
-const { spawn } = require('child_process');
-const fs = require('fs');
+const path = require('node:path');
+const fs = require('node:fs');
+const { spawn } = require('node:child_process');
 const { createBridge } = require('./bridge');
+const { validateSender, validatePayload } = require('./ipc-policy');
+const { resolvePython } = require('./python-runtime');
 
-let mainWindow;
-
-function createWindow() {
-  mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true,
-      preload: path.join(__dirname, 'preload.js'),
-    },
-  });
-
-  // Block any navigation away from the bundled app (defense against injected
-  // links / redirects to external origins).
-  mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (url !== mainWindow.webContents.getURL()) {
-      event.preventDefault();
-    }
-  });
-  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-
-  mainWindow.loadFile('index.html');
-
-  if (process.argv.includes('--dev')) {
-    mainWindow.webContents.openDevTools();
-  }
-
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
+const requestedData = app.commandLine.getSwitchValue('user-data-dir');
+if (requestedData) {
+  if (!path.isAbsolute(requestedData)) throw new Error('--user-data-dir requires an absolute directory');
+  app.setPath('userData', requestedData);
 }
-
-app.whenReady().then(createWindow);
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
-
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
-});
-
-// Packaged applications require a Python interpreter with requirements installed.
+const indexPath = path.join(__dirname, 'index.html');
 const resourceRoot = app.isPackaged ? process.resourcesPath : path.join(__dirname, '..');
-function resolvePythonPath() {
-  const candidates = [
-    path.join(resourceRoot, '.venv', 'bin', 'python'),
-    path.join(resourceRoot, '.venv', 'Scripts', 'python.exe'),
-    process.platform === 'win32' ? 'python' : 'python3',
-  ];
-  for (const candidate of candidates) {
-    const result = require('child_process').spawnSync(candidate,
-      ['-c', 'import sys; assert sys.version_info >= (3, 12); import aiohttp, certifi, curl_cffi, dotenv, pydantic, yaml, rich'],
-      { stdio: 'ignore', timeout: 10000 });
-    if (!result.error && result.status === 0) return candidate;
-  }
-  return candidates[candidates.length - 1];
-}
+let mainWindow;
 let bridge;
-function getBridge() {
+let bridgePromise;
+let bridgeGeneration = 0;
+let quitting = false;
+
+async function getBridge() {
   if (bridge) return bridge;
-  const dataRoot = app.isPackaged ? app.getPath('userData') : resourceRoot;
-  if (app.isPackaged) {
+  if (!bridgePromise) {
+    const generation = bridgeGeneration;
+    bridgePromise = (async () => {
+    const dataRoot = app.isPackaged || requestedData ? app.getPath('userData') : resourceRoot;
     fs.mkdirSync(dataRoot, { recursive: true });
     const config = path.join(dataRoot, 'config.yaml');
-    if (!fs.existsSync(config)) fs.copyFileSync(path.join(resourceRoot, 'config.yaml'), config);
+    if (!fs.existsSync(config)) fs.copyFileSync(path.join(resourceRoot, 'config.yaml'), config, fs.constants.COPYFILE_EXCL);
+    const python = await resolvePython({ packaged: app.isPackaged, resourceRoot, dataRoot });
+    if (quitting || generation !== bridgeGeneration) throw new Error("Application window is closed");
+    bridge = createBridge(spawn, python, path.join(resourceRoot, 'src', 'core', 'api.py'), {
+      cwd: dataRoot, shell: false, windowsHide: true,
+      env: { ...process.env, STAKE_DATA_DIR: dataRoot, PYTHONNOUSERSITE: '1' },
+    });
+    return bridge;
+    })().catch(error => { if (generation === bridgeGeneration) bridgePromise = null; throw error; });
   }
-  bridge = createBridge(spawn, resolvePythonPath(), path.join(resourceRoot, 'src', 'core', 'api.py'), {
-    cwd: dataRoot,
-    env: { ...process.env, STAKE_DATA_DIR: dataRoot },
-  });
-  return bridge;
+  return bridgePromise;
 }
-ipcMain.handle('run-scan', (event, config) => getBridge().request('run-scan', config, true));
-ipcMain.handle('get-history-stats', (event, options) => getBridge().request('get-history-stats', options));
-ipcMain.handle('get-config', () => getBridge().request('get-config'));
-ipcMain.handle('update-config', (event, config) => getBridge().request('update-config', config));
-ipcMain.handle('stop-scan', () => getBridge().stop());
-app.on('before-quit', () => { if (bridge) bridge.stop().catch(() => {}); });
+function createWindow() {
+  mainWindow = new BrowserWindow({ width: 1200, height: 800,
+    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true,
+      webviewTag: false, preload: path.join(__dirname, 'preload.js') },
+  });
+  const contents = mainWindow.webContents;
+  contents.on('will-navigate', event => event.preventDefault());
+  contents.on('will-attach-webview', event => event.preventDefault());
+  contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  contents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
+  contents.session.setPermissionCheckHandler(() => false);
+  mainWindow.loadFile(indexPath);
+  if (process.argv.includes('--dev')) contents.openDevTools();
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+    const previous = bridge;
+    bridgeGeneration++;
+    bridge = null;
+    bridgePromise = null;
+    if (previous) previous.shutdown().catch(() => {});
+  });
+}
+app.whenReady().then(createWindow);
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+for (const command of ['run-scan', 'get-history-stats', 'get-config', 'update-config', 'stop-scan']) {
+  ipcMain.handle(command, async (event, payload) => {
+    validateSender(event, mainWindow, indexPath);
+    const options = validatePayload(command, payload);
+    const service = await getBridge();
+    if (quitting || !mainWindow || mainWindow.isDestroyed()) throw new Error("Application window is closed");
+    validateSender(event, mainWindow, indexPath);
+    return command === 'stop-scan' ? service.stop() : service.request(command, options, command === 'run-scan');
+  });
+}
+app.on('before-quit', event => {
+  if ((!bridge && !bridgePromise) || quitting) return;
+  event.preventDefault();
+  quitting = true;
+  Promise.resolve(bridgePromise).then(service => service?.shutdown()).catch(() => {}).finally(() => app.quit());
+});

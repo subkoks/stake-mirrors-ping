@@ -33,7 +33,8 @@
   </header>
 
   <main>
-    <div id="error-container"></div>
+    <div id="error-container" role="alert"></div>
+    <p id="inventory-count" role="status">Loading configuration…</p>
 
     <!-- Mirrors Panel -->
     <section id="mirrors" class="panel active">
@@ -71,7 +72,7 @@
           <div class="stat-value plain" id="stat-total">—</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Online</div>
+          <div class="stat-label">HTTP Responding</div>
           <div class="stat-value plain" id="stat-online">—</div>
         </div>
         <div class="stat-card">
@@ -134,14 +135,14 @@
         <div class="form-group">
           <label for="rounds">Ping Rounds</label>
           <div class="range">
-            <input type="range" id="rounds" min="1" max="10" value="3">
+            <input type="range" id="rounds" min="1" max="20" value="3">
             <span class="range-val" id="rounds-val">3</span>
           </div>
         </div>
         <div class="form-group">
           <label for="timeout">Timeout (seconds)</label>
           <div class="range">
-            <input type="range" id="timeout" min="1" max="60" value="10">
+            <input type="range" id="timeout" min="1" max="120" value="10">
             <span class="range-val" id="timeout-val">10</span>
           </div>
         </div>
