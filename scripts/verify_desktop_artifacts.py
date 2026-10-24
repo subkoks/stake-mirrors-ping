@@ -20,7 +20,12 @@ def main() -> None:
         for ext in ("dmg", "zip")
     }
     expected |= {f"{prefix}-win-x64-{target}.exe" for target in ("setup", "portable")}
-    expected |= {f"{prefix}-linux-x64.{ext}" for ext in ("AppImage", "deb", "rpm")}
+    # electron-builder expands ${arch} to the native package architecture label.
+    expected |= {
+        f"{prefix}-linux-amd64.deb",
+        f"{prefix}-linux-x86_64.AppImage",
+        f"{prefix}-linux-x86_64.rpm",
+    }
     actual = {
         p.name: p
         for p in args.directory.rglob("*")
