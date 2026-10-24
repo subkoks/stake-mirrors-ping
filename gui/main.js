@@ -5,7 +5,7 @@ const { spawn } = require('node:child_process');
 const { createBridge } = require('./bridge');
 const { validateSender, validatePayload } = require('./ipc-policy');
 const { resolveBackend, backendEnvironment } = require('./backend-runtime');
-const { mirrorURL, releaseURL, latestRelease, newer, support, RELEASE } = require('./desktop-services');
+const { checkedMirrorURL, releaseURL, latestRelease, newer, support, RELEASE } = require('./desktop-services');
 
 const requestedData = app.commandLine.getSwitchValue('user-data-dir');
 if (requestedData) {
@@ -20,7 +20,7 @@ let bridgePromise;
 let bridgeGeneration = 0;
 let quitting = false;
 let supportService;
-const appInfo = { version: app.getVersion() };
+const appInfo = { version: app.getVersion(), electron: process.versions.electron };
 function diagnostics() {
   if (!supportService) supportService = support(app.getPath('userData'), appInfo);
   return supportService;
@@ -37,6 +37,7 @@ async function getBridge() {
     if (!fs.existsSync(config)) fs.copyFileSync(path.join(resourceRoot, 'config.yaml'), config, fs.constants.COPYFILE_EXCL);
     const backend = await resolveBackend({ packaged: app.isPackaged, resourceRoot, dataRoot, version: app.getVersion(), testBuild: require("./package.json").desktopTest === true });
     appInfo.backend = backend.kind;
+    appInfo.python = backend.health?.python;
     diagnostics().record('BACKEND_READY');
     if (quitting || generation !== bridgeGeneration) throw new Error("Application window is closed");
     bridge = createBridge(spawn, backend.executable, null, {
@@ -106,7 +107,9 @@ for (const command of ['app-info', 'open-support', 'copy-diagnostics', 'check-up
       const service = await getBridge();
       const config = await service.request('get-config');
       validateSender(event, mainWindow, indexPath);
-      await shell.openExternal(mirrorURL(payload.url, config.config));
+      const url = await checkedMirrorURL(payload.url, config.config);
+      validateSender(event, mainWindow, indexPath);
+      await shell.openExternal(url);
       return { success: true };
     }
   });

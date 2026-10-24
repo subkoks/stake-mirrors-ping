@@ -23,9 +23,10 @@ async function launch() {
   await page.locator('#run-scan-btn:enabled').waitFor({ timeout: 30000 });
   console.log(`READY_MS ${Date.now() - started}`);
 }
-async function scenario(mode) { fs.writeFileSync(path.join(data, 'scenario.txt'), mode); }
+async function scenario(mode) { fs.writeFileSync(path.join(data, 'scenario.txt'), mode); if (mode === 'partial') fs.rmSync(path.join(data, 'continue-scan'), { force:true }); }
 async function scan(mode) {
   await scenario(mode); await page.locator('#run-scan-btn').click();
+  if (mode === 'partial') { await page.locator('#scan-status').filter({ hasText:'of' }).waitFor(); fs.writeFileSync(path.join(data,'continue-scan'), 'continue'); }
   await page.locator('#scan-status').filter({ hasText: 'Scan complete' }).waitFor({ timeout: 20000 });
 }
 (async () => {
@@ -63,11 +64,28 @@ async function scan(mode) {
       assert.equal(await page.evaluate(url => window.electronAPI.openMirror(url).then(() => false, () => true), url), true);
     }
   });
+  await check('manual update check gives a trusted download action and recovers from failure', async () => {
+    await app.evaluate(() => {
+      const https = process.getBuiltinModule('https');
+      const { EventEmitter } = process.getBuiltinModule('events');
+      https.get = (_url, _options, callback) => {
+        const request = new EventEmitter(); request.destroy = error => request.emit('error', error);
+        queueMicrotask(() => { const response = new EventEmitter(); response.statusCode = 200; callback(response);
+          response.emit('data', Buffer.from(JSON.stringify({ tag_name:'v99.0.0', html_url:'https://github.com/subkoks/stake-mirrors-ping/releases/tag/v99.0.0', draft:false, prerelease:false }))); response.emit('end'); });
+        return request;
+      };
+    });
+    await page.locator('#check-updates-btn').click(); await page.locator('#update-status').filter({ hasText:'99.0.0 is available' }).waitFor();
+    await app.evaluate(() => { process.getBuiltinModule('https').get = () => { throw new Error('Offline fixture'); }; });
+    await page.locator('#check-updates-btn').click(); await page.locator('#update-status').filter({ hasText:'Could not check' }).waitFor();
+    assert.equal(await page.locator('#check-updates-btn').isEnabled(), true);
+  });
   if (fixture) {
     await page.locator('[data-panel="mirrors"]').click();
     await check('measured progress, sorted partial results, blocked and rate-limit states', async () => {
       await scenario('partial'); await page.locator('#run-scan-btn').click();
       await page.locator('#scan-status').filter({ hasText: 'of' }).waitFor();
+      fs.writeFileSync(path.join(data,'continue-scan'), 'continue');
       await page.locator('#scan-status').filter({ hasText: 'Scan complete' }).waitFor();
       const rows = page.locator('#mirrors-body tr'); assert.ok(await rows.count() > 10);
       assert.match(await page.locator('#mirrors-body').innerText(), /Blocked \/ challenge/);
@@ -75,6 +93,16 @@ async function scan(mode) {
       const values = await page.locator('#mirrors-body tr td:nth-child(6)').allTextContents();
       const numeric = values.filter(v => v.includes('ms')).map(parseFloat); assert.deepEqual(numeric, [...numeric].sort((a,b) => a-b));
       await page.screenshot({ path: path.join(base, 'desktop-results.png'), animations: 'disabled' });
+    });
+    await check('open mirror validates its configured destination before handing it to the browser', async () => {
+      await app.evaluate(({ shell }) => {
+        shell.openExternal = async url => { globalThis.testOpenedURL = url; };
+        process.getBuiltinModule('dns').promises.lookup = async () => [{ address: '8.8.8.8', family: 4 }];
+      });
+      await page.locator('#mirrors-body button').first().click();
+      await page.locator('#mirrors-body button').first().filter({ hasText: 'Opened' }).waitFor();
+      const url = await app.evaluate(() => globalThis.testOpenedURL);
+      assert.match(url, /^https:\/\//);
     });
     await check('history is saved and available from the GUI', async () => {
       await page.locator('[data-panel="history"]').click(); await page.locator('#load-history-btn').click();

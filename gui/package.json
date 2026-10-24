@@ -74,15 +74,15 @@
         "to": "config.yaml"
       }
     ],
-    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "artifactName": "Stake-Mirrors-Ping-${version}-${os}-${arch}.${ext}",
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "deleteAppDataOnUninstall": false,
-      "artifactName": "${productName}-${version}-win-${arch}-setup.${ext}"
+      "artifactName": "Stake-Mirrors-Ping-${version}-win-${arch}-setup.${ext}"
     },
     "portable": {
-      "artifactName": "${productName}-${version}-win-${arch}-portable.${ext}"
+      "artifactName": "Stake-Mirrors-Ping-${version}-win-${arch}-portable.${ext}"
     }
   },
   "engines": {

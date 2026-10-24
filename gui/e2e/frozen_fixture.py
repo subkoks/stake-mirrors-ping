@@ -21,7 +21,12 @@ async def fixture_scan(config, progress=None):
     mirrors = parse_mirrors(load_config())
     if progress:
         progress("Checking mirrors", 0, len(mirrors))
-    await asyncio.sleep(30 if mode == "slow" else 0.3)
+    if mode == "partial":
+        async with asyncio.timeout(20):
+            while not (data / "continue-scan").exists():
+                await asyncio.sleep(0.02)
+    else:
+        await asyncio.sleep(30 if mode == "slow" else 0.3)
     results = [
         PingResult(
             m,

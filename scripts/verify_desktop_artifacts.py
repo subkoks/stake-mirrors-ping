@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 
@@ -12,7 +13,7 @@ def main() -> None:
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     version = json.loads((root / "gui/package.json").read_text())["version"]
-    prefix = f"Stake Mirrors Ping-{version}"
+    prefix = f"Stake-Mirrors-Ping-{version}"
     expected = {
         f"{prefix}-mac-{arch}.{ext}"
         for arch in ("x64", "arm64")
@@ -36,7 +37,8 @@ def main() -> None:
         file = actual[name]
         if file.stat().st_size < 1024 * 1024:
             raise SystemExit(f"Installer is unexpectedly small: {name}")
-        digest = hashlib.file_digest(file.open("rb"), "sha256").hexdigest()
+        with file.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
         lines.append(f"{digest}  {name}")
         manifest.append({"name": name, "size": file.stat().st_size, "sha256": digest})
     (args.directory / "SHA256SUMS.txt").write_text("\n".join(lines) + "\n")
@@ -44,6 +46,9 @@ def main() -> None:
         json.dumps(
             {
                 "version": version,
+                "source_commit": subprocess.check_output(
+                    ["git", "rev-parse", "HEAD"], text=True
+                ).strip(),
                 "signed": False,
                 "notarized": False,
                 "files": manifest,

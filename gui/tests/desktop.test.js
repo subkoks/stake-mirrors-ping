@@ -57,3 +57,10 @@ test('invalid stream messages fail closed', async () => {
   proc.stdout.emit('data', Buffer.from('{"type":"progress","stage":"bad","completed":9,"total":2}\n'));
   proc.emit('close',0); await rejected;
 });
+test('mirror DNS validation rejects private, metadata and mixed public/private answers', async () => {
+  const { checkedMirrorURL, publicAddress } = require('../desktop-services');
+  const config = { mirrors: [{ domain:'stake.com', url:'https://stake.com' }] };
+  for (const address of ['127.0.0.1','169.254.169.254','100.100.100.200','10.0.0.1','192.168.1.1','::1','fc00::1','fe80::1','::ffff:127.0.0.1']) assert.equal(publicAddress(address), false, address);
+  await assert.rejects(checkedMirrorURL('https://stake.com', config, async () => [{ address:'8.8.8.8' },{ address:'127.0.0.1' }]), /public/);
+  assert.equal(await checkedMirrorURL('https://stake.com', config, async () => [{ address:'8.8.8.8' }]), 'https://stake.com/');
+});

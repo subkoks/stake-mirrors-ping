@@ -1,6 +1,22 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const https = require('node:https');
+const dns = require('node:dns');
+const { BlockList, isIP } = require('node:net');
+const blocked = new BlockList();
+for (const [address, prefix] of [['0.0.0.0',8],['10.0.0.0',8],['100.64.0.0',10],['127.0.0.0',8],['169.254.0.0',16],['172.16.0.0',12],['192.0.0.0',24],['192.0.2.0',24],['198.51.100.0',24],['203.0.113.0',24],['192.168.0.0',16],['198.18.0.0',15],['224.0.0.0',4],['240.0.0.0',4]]) blocked.addSubnet(address,prefix,'ipv4');
+function publicAddress(address) {
+  return isIP(address) === 4 ? !blocked.check(address,'ipv4') : isIP(address) === 6 && /^[23][0-9a-f]{3}:/i.test(address) && !address.toLowerCase().startsWith('2001:db8:');
+}
+async function checkedMirrorURL(value, config, lookup = dns.promises.lookup) {
+  const url = mirrorURL(value, config);
+  let timer;
+  try {
+    const addresses = await Promise.race([lookup(new URL(url).hostname, { all: true }), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Address lookup timed out. Retry later.')), 5000); })]);
+    if (!addresses.length || addresses.some(item => !publicAddress(item.address))) throw new Error('Mirror does not resolve exclusively to public addresses');
+    return url;
+  } finally { clearTimeout(timer); }
+}
 const RELEASE = 'https://github.com/subkoks/stake-mirrors-ping/releases';
 function releaseURL(value) {
   const url = new URL(value);
@@ -43,7 +59,7 @@ function support(dataRoot, info) {
   const folder = path.join(dataRoot, 'support');
   fs.mkdirSync(folder, { recursive: true });
   // An allowlist deliberately excludes user paths, environment, tokens, configuration and scan data.
-  function summary() { return JSON.stringify({ app: 'Stake Mirrors Ping', version: info.version, platform: process.platform, architecture: process.arch, backend: info.backend || 'not ready', lastIssue: info.issue || 'none' }, null, 2); }
+  function summary() { return JSON.stringify({ app: 'Stake Mirrors Ping', version: info.version, platform: process.platform, architecture: process.arch, backend: info.backend || 'not ready', python: info.python || 'not ready', electron: info.electron || 'unknown', lastIssue: info.issue || 'none' }, null, 2); }
   function record(issue) {
     info.issue = issue; // Callers supply fixed diagnostic codes, never raw exception text.
     const file = path.join(folder, 'diagnostics.log');
@@ -53,4 +69,4 @@ function support(dataRoot, info) {
   fs.writeFileSync(path.join(folder, 'README.txt'), 'Support diagnostics contain app/runtime details and fixed error codes only. Settings and history remain in the parent directory. Never send account tokens or personal scan data.\n');
   return { folder, summary, record };
 }
-module.exports = { releaseURL, mirrorURL, latestRelease, newer, support, RELEASE };
+module.exports = { releaseURL, mirrorURL, checkedMirrorURL, publicAddress, latestRelease, newer, support, RELEASE };

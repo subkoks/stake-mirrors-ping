@@ -84,6 +84,8 @@ document.getElementById('run-scan-btn').addEventListener('click', async () => {
   scanStatus.textContent = 'Starting scan…';
   document.getElementById('error-container').replaceChildren();
   document.getElementById('scan-summary').textContent = '';
+  displayMirrors([]);
+  updateDashboard({ mirrors: [] });
   const progressBar = document.getElementById('scan-progress');
   progressBar.hidden = false; progressBar.removeAttribute('value');
   const unsubscribe = window.electronAPI.onScanProgress(progress => {
@@ -177,7 +179,12 @@ function displayMirrors(mirrors) {
     const best = td(latCell(mirror.best_ms)); best.className = 'technical'; row.appendChild(best);
     const open = el('button', null, 'Open mirror');
     open.setAttribute('aria-label', `Open ${mirror.domain} in your browser`);
-    open.addEventListener('click', () => window.electronAPI.openMirror(mirror.url).catch(error => showError(error.message)));
+    open.addEventListener('click', async () => {
+      open.disabled = true;
+      try { await window.electronAPI.openMirror(mirror.url); open.textContent = 'Opened'; }
+      catch (error) { showError(error.message); }
+      finally { open.disabled = false; }
+    });
     row.appendChild(td(open));
     tbody.appendChild(row);
   });
