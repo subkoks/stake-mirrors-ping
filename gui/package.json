@@ -1,19 +1,20 @@
 {
   "name": "stake-mirrors-ping-gui",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Desktop GUI for Stake Mirrors Ping",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "build": "electron-builder",
-    "build:mac": "electron-builder --mac",
-    "build:win": "electron-builder --win",
-    "build:linux": "electron-builder --linux",
+    "build": "electron-builder --config electron-builder.cjs",
+    "build:mac": "electron-builder --config electron-builder.cjs --mac",
+    "build:win": "electron-builder --config electron-builder.cjs --win",
+    "build:linux": "electron-builder --config electron-builder.cjs --linux",
     "test": "node --test tests/*.test.js",
-    "build:check": "electron-builder --dir",
+    "build:check": "electron-builder --config electron-builder.cjs --dir",
     "test:electron": "node e2e/gui.cjs",
-    "test:electron:packaged": "node e2e/gui.cjs --packaged"
+    "test:electron:packaged": "node e2e/gui.cjs --packaged",
+    "test:desktop": "node e2e/desktop.cjs"
   },
   "keywords": [],
   "author": {
@@ -41,7 +42,9 @@
       "styles.css",
       "package.json",
       "ipc-policy.js",
-      "python-runtime.js"
+      "python-runtime.js",
+      "backend-runtime.js",
+      "desktop-services.js"
     ],
     "mac": {
       "category": "public.app-category.utilities",
@@ -49,7 +52,7 @@
         "dmg",
         "zip"
       ],
-      "minimumSystemVersion": "12.0"
+      "minimumSystemVersion": "13.0"
     },
     "win": {
       "target": [
@@ -69,21 +72,18 @@
       {
         "from": "../config.yaml",
         "to": "config.yaml"
-      },
-      {
-        "from": "../src",
-        "to": "src",
-        "filter": [
-          "**/*",
-          "!**/__pycache__/**",
-          "!**/*.pyc"
-        ]
-      },
-      {
-        "from": "../requirements.txt",
-        "to": "requirements.txt"
       }
-    ]
+    ],
+    "artifactName": "Stake-Mirrors-Ping-${version}-${os}-${arch}.${ext}",
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "Stake-Mirrors-Ping-${version}-win-${arch}-setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "Stake-Mirrors-Ping-${version}-win-${arch}-portable.${ext}"
+    }
   },
   "engines": {
     "node": ">=22.12.0 <23"

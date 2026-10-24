@@ -4,6 +4,7 @@
 import asyncio
 import os
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -114,7 +115,10 @@ class ScanResult:
     scan_id: str
 
 
-async def run_scan(config: OrchestratorConfig) -> ScanResult:
+async def run_scan(
+    config: OrchestratorConfig,
+    progress: Callable[[str, int, int], None] | None = None,
+) -> ScanResult:
     """Core scan logic (CLI-independent, no Rich/console dependencies).
 
     Args:
@@ -143,12 +147,24 @@ async def run_scan(config: OrchestratorConfig) -> ScanResult:
     )
 
     # Step 1: Ping all mirrors
+    progress_options = {}
+    if progress is not None:
+        progress("Checking mirrors", 0, len(mirrors))
+        progress_options["progress"] = lambda done, total: progress(
+            "Checking mirrors", done, total
+        )
     results = await ping_all_mirrors(
-        mirrors, rounds=rounds, timeout=timeout, concurrency=concurrency
+        mirrors,
+        rounds=rounds,
+        timeout=timeout,
+        concurrency=concurrency,
+        **progress_options,
     )
 
     # Step 2: GeoIP enrichment
     if not config.skip_geoip:
+        if progress is not None:
+            progress("Looking up locations", len(mirrors), len(mirrors))
         results = await enrich_with_geoip(results)
 
     # Step 3: Stake API tests
@@ -172,6 +188,8 @@ async def run_scan(config: OrchestratorConfig) -> ScanResult:
     # Step 4: NordVPN recommendations
     recommendations: dict[str, list[VPNRecommendation]] = {}
     if not config.skip_vpn:
+        if progress is not None:
+            progress("Preparing recommendations", len(mirrors), len(mirrors))
         target_countries = nordvpn_config.get("target_regions", [])
         if target_countries:
             recommendations = await get_vpn_recommendations(results, target_countries)

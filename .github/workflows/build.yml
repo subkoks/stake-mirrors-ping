@@ -5,9 +5,11 @@ on:
     branches: [main]
   push:
     branches: [main]
-  release:
-    types: [created]
   workflow_dispatch:
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -17,10 +19,24 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        include:
+          - os: windows-2022
+            platform: win32
+            arch: x64
+          - os: macos-15-intel
+            platform: darwin
+            arch: x64
+          - os: macos-15
+            platform: darwin
+            arch: arm64
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      MACOSX_DEPLOYMENT_TARGET: '13.0'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -30,53 +46,89 @@ jobs:
           cache-dependency-path: gui/package-lock.json
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: '3.13'
-      - name: Install Python runtime dependencies
+          python-version: '3.13.16'
+          architecture: ${{ matrix.arch }}
+      - name: Install locked backend build environment
         run: |
           python -m pip install uv==0.12.5
-          uv sync --locked --no-dev
-      - name: Install GUI dependencies
+          uv sync --locked --group desktop --python python
+      - name: Freeze and exercise native production backend
+        run: |
+          uv run --frozen --python 3.13.16 --group desktop python scripts/build_backend.py
+          uv run --frozen --python 3.13.16 python scripts/test_frozen_backend.py packaging/output/production/${{ matrix.platform }}-${{ matrix.arch }}/stake-backend/stake-backend${{ matrix.platform == 'win32' && '.exe' || '' }}
+      - name: Install GUI tools and verify dependency graph
         working-directory: gui
-        run: npm ci --omit=optional --registry=https://registry.npmjs.org
-      - name: Install developer test Electron binary
-        if: matrix.os == 'macos-latest'
+        run: |
+          npm ci --omit=optional --registry=https://registry.npmjs.org
+          node node_modules/electron/install.js
+          npm audit --include=dev --include=optional --audit-level=high --registry=https://registry.npmjs.org
+          npm test
+      - name: Build production application and installers
         working-directory: gui
-        run: node node_modules/electron/install.js
-      - name: Audit all GUI dependencies
-        working-directory: gui
-        run: npm audit --include=dev --include=optional --audit-level=high --registry=https://registry.npmjs.org
-      - name: GUI regression tests
-        working-directory: gui
-        run: npm test
-      - name: Verify packaged application (no publishing)
-        working-directory: gui
-        run: npm run build:check -- --publish never
-      - name: Rendered Electron interaction checks (macOS)
-        if: matrix.os == 'macos-latest'
-        working-directory: gui
+        run: npm run build -- --publish never --${{ matrix.arch }}
+      - name: Install candidate for acceptance checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --frozen --python 3.13.16 python scripts/install_desktop_candidate.py
+      - name: Production packaged GUI checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$RUNNER_OS" = Linux ]; then
+            xvfb-run -a node gui/e2e/desktop.cjs
+          else
+            node gui/e2e/desktop.cjs
+          fi
+      - name: Linux clean runtime acceptance (Ubuntu 22.04 and 24.04)
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for baseline in 22.04 24.04; do
+            docker build --build-arg BASE=ubuntu:$baseline -t stake-clean:$baseline -f packaging/clean-linux.Dockerfile .
+            timeout 8m docker run --rm --init --shm-size=1g --cap-add=SYS_ADMIN --security-opt seccomp=unconfined -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE:ro" -v "$(command -v node):/node:ro" -e STAKE_PACKAGE_DIR="$GITHUB_WORKSPACE/gui/dist" -e STAKE_E2E_SCRIPT="$GITHUB_WORKSPACE/gui/e2e/desktop.cjs" stake-clean:$baseline bash -c '
+              set -euo pipefail
+              echo "Clean container started; installing the application"
+              /node --version
+              apt-get update
+              apt-get install -y --no-install-recommends "$STAKE_PACKAGE_DIR/"*.deb
+              for tool in python3 python git node; do
+                if command -v "$tool"; then echo "Unexpected system runtime: $tool" >&2; exit 1; fi
+              done
+              useradd -m desktoptest
+              runuser -u desktoptest -- env STAKE_E2E_SANDBOX=1 STAKE_E2E_OUTPUT=/tmp STAKE_DESKTOP_EXECUTABLE="/opt/Stake Mirrors Ping/stake-mirrors-ping-gui" xvfb-run -a /node "$STAKE_E2E_SCRIPT"
+            '
+          done
+      - name: Build isolated fixture backend and test application
+        shell: bash
         env:
-          STAKE_E2E_PYTHON: ${{ github.workspace }}/.venv/bin/python
-          STAKE_E2E_OUTPUT: ${{ runner.temp }}
-        run: npm run test:electron
-      - name: Packaged Electron startup and interaction checks (macOS)
-        if: matrix.os == 'macos-latest'
-        working-directory: gui
-        env:
-          STAKE_E2E_PYTHON: ${{ github.workspace }}/.venv/bin/python
-          STAKE_E2E_OUTPUT: ${{ runner.temp }}
-        run: npm run test:electron:packaged
-      - name: Verify unsigned platform installers (no publishing)
-        working-directory: gui
-        run: npm run build -- --publish never ${{ matrix.os == 'macos-latest' && '--x64 --arm64' || '' }}
+          STAKE_DESKTOP_TEST: '1'
+        run: |
+          set -euo pipefail
+          uv run --frozen --python 3.13.16 --group desktop python scripts/build_backend.py --fixture
+          cd gui
+          npm run build:check -- --publish never --config.directories.output=dist-fixture
+          cd ..
+          uv run --frozen --python 3.13.16 python scripts/install_desktop_candidate.py --fixture
+      - name: Offline packaged GUI interactions
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$RUNNER_OS" = Linux ]; then
+            xvfb-run -a node gui/e2e/desktop.cjs --fixture
+          else
+            node gui/e2e/desktop.cjs --fixture
+          fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: failure() && matrix.os == 'macos-latest'
+        if: failure()
         with:
-          name: gui-failure-diagnostics
-          path: ${{ runner.temp }}/stake94-e2e-*/failure.png
+          name: desktop-failure-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/stake-desktop-*/failure.png
           if-no-files-found: ignore
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: desktop-app-${{ matrix.os }}
+          name: desktop-app-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
             gui/dist/*.dmg
             gui/dist/*.zip
@@ -84,26 +136,23 @@ jobs:
             gui/dist/*.AppImage
             gui/dist/*.deb
             gui/dist/*.rpm
-          retention-days: 14
           if-no-files-found: error
+          retention-days: 14
 
-  release:
-    if: github.event_name == 'release'
+  candidate:
     needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    runs-on: ubuntu-22.04
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: desktop-app-*
-          path: artifacts
-      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+          path: candidate
+          merge-multiple: true
+      - name: Verify final candidate inventory and compute checksums
+        run: python3 scripts/verify_desktop_artifacts.py candidate
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          files: |
-            artifacts/desktop-app-*/*.dmg
-            artifacts/desktop-app-*/*.zip
-            artifacts/desktop-app-*/*.exe
-            artifacts/desktop-app-*/*.AppImage
-            artifacts/desktop-app-*/*.deb
-            artifacts/desktop-app-*/*.rpm
+          name: desktop-release-candidate
+          path: candidate/*
+          retention-days: 14

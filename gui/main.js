@@ -1,10 +1,11 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, clipboard } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { spawn } = require('node:child_process');
 const { createBridge } = require('./bridge');
 const { validateSender, validatePayload } = require('./ipc-policy');
-const { resolvePython } = require('./python-runtime');
+const { resolveBackend, backendEnvironment } = require('./backend-runtime');
+const { checkedMirrorURL, releaseURL, latestRelease, newer, support, RELEASE } = require('./desktop-services');
 
 const requestedData = app.commandLine.getSwitchValue('user-data-dir');
 if (requestedData) {
@@ -18,6 +19,12 @@ let bridge;
 let bridgePromise;
 let bridgeGeneration = 0;
 let quitting = false;
+let supportService;
+const appInfo = { version: app.getVersion(), electron: process.versions.electron };
+function diagnostics() {
+  if (!supportService) supportService = support(app.getPath('userData'), appInfo);
+  return supportService;
+}
 
 async function getBridge() {
   if (bridge) return bridge;
@@ -28,14 +35,19 @@ async function getBridge() {
     fs.mkdirSync(dataRoot, { recursive: true });
     const config = path.join(dataRoot, 'config.yaml');
     if (!fs.existsSync(config)) fs.copyFileSync(path.join(resourceRoot, 'config.yaml'), config, fs.constants.COPYFILE_EXCL);
-    const python = await resolvePython({ packaged: app.isPackaged, resourceRoot, dataRoot });
+    const backend = await resolveBackend({ packaged: app.isPackaged, resourceRoot, dataRoot, version: app.getVersion(), testBuild: require("./package.json").desktopTest === true });
+    appInfo.backend = backend.kind;
+    appInfo.python = backend.health?.python;
+    diagnostics().record('BACKEND_READY');
     if (quitting || generation !== bridgeGeneration) throw new Error("Application window is closed");
-    bridge = createBridge(spawn, python, path.join(resourceRoot, 'src', 'core', 'api.py'), {
+    bridge = createBridge(spawn, backend.executable, null, {
       cwd: dataRoot, shell: false, windowsHide: true,
-      env: { ...process.env, STAKE_DATA_DIR: dataRoot, PYTHONNOUSERSITE: '1' },
+      env: backendEnvironment(process.env, dataRoot),
+    }, backend.args, progress => {
+      if (generation === bridgeGeneration && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('scan-progress', progress);
     });
     return bridge;
-    })().catch(error => { if (generation === bridgeGeneration) bridgePromise = null; throw error; });
+    })().catch(error => { if (generation === bridgeGeneration) bridgePromise = null; diagnostics().record('BACKEND_START_FAILED'); throw error; });
   }
   return bridgePromise;
 }
@@ -74,6 +86,35 @@ for (const command of ['run-scan', 'get-history-stats', 'get-config', 'update-co
     return command === 'stop-scan' ? service.stop() : service.request(command, options, command === 'run-scan');
   });
 }
+
+for (const command of ['app-info', 'open-support', 'copy-diagnostics', 'check-updates', 'open-release', 'open-mirror']) {
+  ipcMain.handle(command, async (event, payload = {}) => {
+    validateSender(event, mainWindow, indexPath);
+    validatePayload(command, payload);
+    if (command === 'app-info') return { version: app.getVersion(), platform: process.platform, architecture: process.arch, backend: appInfo.backend || 'not ready' };
+    if (command === 'copy-diagnostics') { await clipboard.writeText(diagnostics().summary()); return { success: true }; }
+    if (command === 'open-support') {
+      const error = await shell.openPath(diagnostics().folder);
+      if (error) throw new Error('The support folder could not be opened. Please try again.');
+      return { success: true };
+    }
+    if (command === 'check-updates') {
+      try { const result = await latestRelease(); return { ...result, available: newer(result.version, app.getVersion()) }; }
+      catch (_) { diagnostics().record('UPDATE_CHECK_FAILED'); throw new Error('Could not check for updates. Check your internet connection and try again.'); }
+    }
+    if (command === 'open-release') { await shell.openExternal(releaseURL(RELEASE)); return { success: true }; }
+    if (command === 'open-mirror') {
+      const service = await getBridge();
+      const config = await service.request('get-config');
+      validateSender(event, mainWindow, indexPath);
+      const url = await checkedMirrorURL(payload.url, config.config);
+      validateSender(event, mainWindow, indexPath);
+      await shell.openExternal(url);
+      return { success: true };
+    }
+  });
+}
+
 app.on('before-quit', event => {
   if ((!bridge && !bridgePromise) || quitting) return;
   event.preventDefault();

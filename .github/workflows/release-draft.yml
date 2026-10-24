@@ -1,0 +1,31 @@
+name: Prepare approved release draft
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag created only after final candidate approval
+        required: true
+        type: string
+      run_id:
+        description: Successful Build Desktop App run at that exact tag commit
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+jobs:
+  draft:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Verify approved source and completed candidate run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          BUILD_RUN_ID: ${{ inputs.run_id }}
+        run: python3 scripts/prepare_release_draft.py

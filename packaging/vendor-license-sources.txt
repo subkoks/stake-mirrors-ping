@@ -1,0 +1,10 @@
+curl https://raw.githubusercontent.com/curl/curl/curl-8_15_0/COPYING
+boringssl https://raw.githubusercontent.com/google/boringssl/8f77af2e983b73df4f018e2a141450d005f5587b/LICENSE
+zlib https://raw.githubusercontent.com/madler/zlib/v1.3.1/LICENSE
+brotli https://raw.githubusercontent.com/google/brotli/v1.2.0/LICENSE
+zstd https://raw.githubusercontent.com/facebook/zstd/v1.5.6/LICENSE
+nghttp2 https://raw.githubusercontent.com/nghttp2/nghttp2/v1.63.0/COPYING
+nghttp3 https://raw.githubusercontent.com/ngtcp2/nghttp3/v1.15.0/COPYING
+ngtcp2 https://raw.githubusercontent.com/ngtcp2/ngtcp2/v1.20.0/COPYING
+libffi https://raw.githubusercontent.com/libffi/libffi/v3.4.8/LICENSE
+openssl https://raw.githubusercontent.com/openssl/openssl/openssl-3.5.9/LICENSE.txt

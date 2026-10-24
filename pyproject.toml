@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stake-mirrors-ping"
-version = "2.0.0"
+version = "2.1.0"
 description = "Find the fastest Stake.com mirror site + optimal NordVPN region for lowest latency. CLI tool with desktop GUI."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -93,6 +93,7 @@ testpaths = ["tests"]
 
 
 [dependency-groups]
+desktop = ["pyinstaller==6.22.3", "pyinstaller-hooks-contrib==2026.9"]
 dev = [
     "pytest>=8.0",
     "ruff>=0.15.0",
