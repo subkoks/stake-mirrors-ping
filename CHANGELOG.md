@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Refresh the offline inventory from PlayStake public JSON; retain absent/custom entries and record provenance.
+- Add explicit preview-first, guarded, atomic mirror refresh.
+- Validate mirror destinations and public DNS; prevent credential redirects and mismatched trusted hosts.
+- Classify local reachability honestly and rank by HTTP latency consistently across CLI/GUI/exports.
+- Honor configured concurrency, bound DNS waits, deduplicate GeoIP, and fix GUI stop/restart ownership.
+- Preserve SQLite rows with additive status metadata; historical best timings remain legacy measurements.
+- Restore tracked GUI manifests, packaged resource paths/config inclusion, reproducible CI and dependency auditing.
+
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),

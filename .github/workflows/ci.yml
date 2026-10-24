@@ -6,7 +6,8 @@ on:
   pull_request:
     branches: [ main, develop ]
 
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -25,23 +26,19 @@ jobs:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
 
-    - name: Install dependencies
+    - name: Install locked dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -e .
+        python -m pip install uv==0.12.5
+        uv sync --locked --python ${{ matrix.python-version }}
 
-    - name: Lint with ruff
-      run: |
-        pip install ruff
-        ruff check src/ tests/
+    - name: Lint
+      run: uv run --frozen ruff check src/ tests/
 
-    - name: Test basic import
-      run: python -m src.main --help
+    - name: CLI help (no account activity)
+      run: uv run --frozen python -m src.main --help
 
-    - name: Run tests
-      run: |
-        pip install pytest
-        pytest tests/ -v
+    - name: Tests
+      run: uv run --frozen pytest tests/ -v
 
   security:
     runs-on: ubuntu-latest
@@ -53,16 +50,14 @@ jobs:
       with:
         python-version: '3.13'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install pip-audit==2.10.1 bandit
+    - name: Install audit tools
+      run: python -m pip install uv==0.12.5 pip-audit==2.10.1 bandit==1.9.4
 
-    - name: Check for security vulnerabilities
+    - name: Audit locked application dependencies
       run: |
-        # Resolve and audit application dependencies, not scanner dependencies.
-        python -m pip_audit -r requirements.txt
-        bandit -r src/ || true
+        uv export --frozen --no-dev --no-emit-project --format requirements-txt --output-file audit-requirements.txt
+        python -m pip_audit -r audit-requirements.txt
+        bandit -r src/
 
   code-quality:
     runs-on: ubuntu-latest
@@ -74,16 +69,21 @@ jobs:
       with:
         python-version: '3.13'
 
-    - name: Install dependencies
+    - name: Install locked development and application dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install isort mypy ruff
+        python -m pip install uv==0.12.5
+        uv sync --locked
 
-    - name: Check code formatting with ruff
-      run: ruff format --check src/ tests/
+    - name: Formatting and imports
+      run: |
+        uv run --frozen ruff format --check src/ tests/
+        uv run --frozen isort --check-only src/ tests/
 
-    - name: Check import sorting with isort
-      run: isort --check-only src/ tests/
+    - name: Type check
+      run: uv run --frozen mypy src/
 
-    - name: Type check with mypy
-      run: mypy src/
+    - name: Build Python packages
+      run: uv build
+
+    - name: Check packaged configuration
+      run: python -c "import glob,zipfile; p=glob.glob('dist/*.whl')[0]; assert any(n.endswith('/share/stake-mirrors-ping/config.yaml') for n in zipfile.ZipFile(p).namelist())"

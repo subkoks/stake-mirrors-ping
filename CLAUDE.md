@@ -23,7 +23,7 @@
 
 ### Core Services
 - **Pinger:** `src/pinger.py` — TCP, HTTPS, DNS latency tests with concurrent semaphore
-- **DNS resolver:** `src/dns_resolver.py` — GeoIP enrichment via ip-api.com
+- **DNS resolver:** `src/dns_resolver.py` — GeoIP enrichment via HTTPS ipquery.io
 - **Stake API:** `src/stake_api.py` — GraphQL latency + $0 dice bet benchmarks via curl_cffi
 - **NordVPN:** `src/nordvpn.py` — fetch VPN servers, haversine distance, latency estimation
 - **History:** `src/history.py` — HistoryDB class with context manager, SQLite persistence
@@ -37,7 +37,7 @@
 
 ## Key Files
 
-- `config.yaml` — 16 mirrors, ping settings, NordVPN target regions
+- `config.yaml` — canonical mirror inventory, ping settings, NordVPN target regions
 - `src/models.py` — all data structures
 - `src/pinger.py` — core ping logic
 - `src/history.py` — SQLite schema and queries
@@ -55,10 +55,10 @@
 - **Export CSV:** `python -m src.main --export csv`
 - **History stats:** `python -m src.main --history`
 - **Skip VPN:** `python -m src.main --skip-vpn`
-- **Tests:** `python -m pytest tests/ -v`
+- **Tests:** `uv run --frozen python -m pytest tests/ -v`
 
 ### GUI
-- **Development:** `cd gui && npm install && npm start`
+- **Development:** `cd gui && npm ci && npm start`
 - **Build macOS:** `cd gui && npm run build:mac`
 - **Build Windows:** `cd gui && npm run build:win`
 - **Build Linux:** `cd gui && npm run build:linux`
@@ -75,7 +75,7 @@
 - SQLite for history persistence (`history.db` at project root)
 - Parameterized SQL queries (no string interpolation)
 - `curl_cffi` for Cloudflare TLS fingerprint bypass in API tests
-- GeoIP via ip-api.com free tier (45 req/min, 1.5s delay between calls)
+- GeoIP via HTTPS ipquery.io, deduplicated per IP within each scan
 - Haversine distance for VPN server proximity calculation
 - Pydantic v2 for data validation and serialization
 - Core API layer is CLI-independent for GUI reuse
@@ -90,3 +90,5 @@
 - History DB is append-only — never delete scan results
 - `config.yaml` is the single source of truth for mirrors and settings
 - Run `python -m pytest tests/ -v` before committing
+
+Mirror refresh and result semantics: see `docs/mirrors/refresh.md`. Never run authenticated or bet benchmarks as maintenance checks.

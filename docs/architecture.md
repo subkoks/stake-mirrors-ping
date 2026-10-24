@@ -15,7 +15,7 @@ src/
 │   ├── serializers.py   ← Pydantic v2 schemas for JSON export
 │   └── api.py           ← JSON-RPC server for GUI communication
 ├── pinger.py            ← TCP, HTTPS, DNS latency tests (semaphore-bounded)
-├── dns_resolver.py      ← GeoIP enrichment via ip-api.com
+├── dns_resolver.py      ← GeoIP enrichment via HTTPS ipquery.io
 ├── stake_api.py         ← GraphQL latency + $0 dice bet benchmarks (curl_cffi)
 ├── nordvpn.py           ← VPN server fetch, haversine distance, latency estimation
 ├── reporter.py          ← Rich table output, JSON/CSV export
@@ -50,10 +50,19 @@ gui/
 ## Key Design Decisions
 
 - `curl_cffi` for Cloudflare TLS fingerprint bypass
-- GeoIP via ip-api.com free tier (45 req/min, cached)
+- GeoIP via HTTPS ipquery.io, deduplicated per IP within a scan
 - SQLite append-only history (never delete scan results)
 - `config.yaml` is single source of truth for mirrors
 - Core API layer is CLI-independent for GUI reuse
 - Pydantic v2 for data validation and serialization
 - GUI communicates via JSON-RPC through Python subprocess
 - HistoryDB uses context manager for resource cleanup
+
+The explicit `src.mirror_update` developer command discovers public source origins,
+previews additions and refuses reduced inventories. `src.mirror_validation` guards
+configuration and actual DNS connections. No browser is needed for normal use.
+See [mirror refresh](mirrors/refresh.md) for status/ranking compatibility and provenance.
+
+Electron's `bridge.js` owns scan subprocesses through cancellation/exit. Packaged
+code/config live under `process.resourcesPath`; writable config/history live in
+`app.getPath('userData')`. Python and its dependencies must be installed separately.
