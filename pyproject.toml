@@ -97,7 +97,7 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.15.0",
     "mypy>=2.0.0",
-    "isort>=5.13,<7",
+    "isort>=5.13,<10",
     "types-PyYAML>=6",
 ]
 
