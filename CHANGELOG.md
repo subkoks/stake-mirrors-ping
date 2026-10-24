@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — 2.1.0 desktop candidate
+
+- Bundle a native Python 3.13.16 scan engine with the Electron desktop application; no end-user interpreter or package installation.
+- Preserve saved configuration/history while ignoring obsolete external interpreter preferences in packaged apps.
+- Add measured scan progress, simpler controls, safe configured-mirror opening, error recovery, About/support diagnostics and manual update checks.
+- Build each backend on its own OS/architecture; add packaged interaction and installer-path checks for all four desktop targets.
+- Correct Electron 45 minimum macOS version to 13 and document the Linux baseline.
+- Prepare final-file checksums and a validated release candidate without publishing a new tag or release.
+
 ## [2.0.0] - 2026-10-24
 
 - Upgrade Electron 33.4.11 to stable supported 43.8.3 and electron-builder 25.1.8 to 26.18.0; resolve the full npm audit without overrides.

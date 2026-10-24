@@ -2,6 +2,7 @@ import asyncio
 import socket
 import ssl
 import time
+from collections.abc import Callable
 from urllib.parse import urlsplit
 
 import aiohttp
@@ -184,13 +185,21 @@ async def ping_all_mirrors(
     rounds: int = 3,
     timeout: float = 10.0,
     concurrency: int = 16,
+    progress: Callable[[int, int], None] | None = None,
 ) -> list[PingResult]:
     rounds, timeout, concurrency = validate_settings(rounds, timeout, concurrency)
     sem = asyncio.Semaphore(concurrency)
 
+    completed = 0
+
     async def limited(mirror: MirrorConfig) -> PingResult:
+        nonlocal completed
         async with sem:
-            return await ping_mirror(mirror, rounds, timeout)
+            result = await ping_mirror(mirror, rounds, timeout)
+            completed += 1
+            if progress is not None:
+                progress(completed, len(mirrors))
+            return result
 
     tasks = [asyncio.create_task(limited(m)) for m in mirrors]
     try:

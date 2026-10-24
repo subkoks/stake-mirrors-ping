@@ -1,249 +1,64 @@
-<h1>
-  <picture>
-    <source media="(max-width: 600px)" srcset="assets/readme/hero-mobile.svg">
-    <img src="assets/readme/hero.svg" width="100%" alt="Stake mirrors ping — BLACK.TERMINAL">
-  </picture>
-</h1>
+# Stake Mirrors Ping
 
-**stake-mirrors-ping** is a desktop GUI for measuring Stake mirror latency on Windows, macOS, and Linux, with NordVPN region recommendations, scan history, and JSON/CSV export. A Python CLI is also available.
+Find responsive Stake mirrors from a desktop window. Start a scan, compare response times, and open a mirror in your browser. No account or login is needed to scan.
 
-**[Quick start](#quick-start)** · [Features](#features) · [CLI options](#cli-options) · [Configuration](#config) · [Architecture](#architecture)
+![Desktop scan results](assets/readme/desktop.png)
 
-[![Python 3.12+](https://img.shields.io/badge/python-3.12+-393632?labelColor=1B1A18)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-393632?labelColor=1B1A18)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/subkoks/stake-mirrors-ping)](https://github.com/subkoks/stake-mirrors-ping/releases)
+*Actual packaged desktop interface with deterministic test results, not live mirror measurements.*
 
-## Desktop downloads
+**[Downloads](https://github.com/subkoks/stake-mirrors-ping/releases/latest)** · [Troubleshooting](#troubleshooting) · [Development and CLI](docs/development.md)
 
-Download the latest **[desktop release](https://github.com/subkoks/stake-mirrors-ping/releases/latest)**. Choose Windows x64 (installer or portable EXE), macOS Apple Silicon or Intel (DMG/ZIP), or Linux x64 (AppImage/DEB/RPM). Desktop builds require a separate Python 3.12+ environment with the application dependencies; see [desktop setup](#desktop-gui). Binaries are unsigned and macOS builds are not notarized.
+**Release status:** the self-contained **2.1.0 candidate** is under validation and awaits final release approval. The latest published **v2.0.0 requires external Python**; it does not provide the installation experience described for the new candidate. Existing release files will not be replaced.
 
-## Quick start
+## Install and scan
 
-### CLI
+For the self-contained candidate and its eventual approved release:
 
-```bash
-# Install locked Python dependencies (Python 3.12+)
-uv sync --locked
-source .venv/bin/activate
+1. Choose the download for your operating system and processor.
+2. Install the app and open **Stake Mirrors Ping**.
+3. Click **Start scan**. Progress shows how many mirrors have been checked.
+4. Compare the sorted results and click **Open mirror** for your choice. Use **Cancel** or **Scan again** when needed.
 
-# Basic ping test (no API key needed)
-python -m src.main
+Python, Node, Git, a terminal, and package installation are **not required** by the bundled desktop candidate. Backend setup does not use the internet or install anything into your system Python. Network access is needed to scan mirrors and check for updates.
 
-# With API latency tests
-cp .env.example .env  # add your STAKE_SESSION_TOKEN
-python -m src.main --api
+| Desktop target | Planned support baseline | Download |
+| --- | --- | --- |
+| Windows x64 | Windows 10/11; CI validation uses Windows Server | Setup EXE; portable EXE |
+| macOS Apple Silicon | macOS 13+ | arm64 DMG/ZIP |
+| macOS Intel | macOS 13+ | x64 DMG/ZIP |
+| Linux x64 | Ubuntu 22.04/24.04 desktop, glibc 2.35+ | DEB or AppImage; RPM is built separately and needs distribution qualification |
 
-# With $0 Dice bet latency benchmark
-python -m src.main --api --benchmark-bets
+Minimum-version compatibility and the exact installer/interaction evidence are documented in [desktop distribution](docs/desktop-distribution.md). Linux support is not a claim about every distribution. Windows ARM and Linux ARM are not included.
 
-# Export results
-python -m src.main --export json
-python -m src.main --export csv
+### Installation notes
 
-# Live dashboard (refresh every 30s)
-python -m src.main --live 30
+- **Windows:** run the Setup EXE. The portable EXE is an alternative that does not install the app.
+- **macOS:** open the DMG and drag the app into Applications, then open it from Applications.
+- **Ubuntu:** open the DEB in your software installer. AppImage execution permissions and FUSE availability vary by desktop; use the DEB when your desktop cannot launch AppImages directly.
+- Candidate builds are **unsigned and not notarized**. Public, frictionless macOS distribution still needs Developer ID signing and notarization. Do not disable OS security protections. If your OS blocks an unsigned candidate, wait for an appropriately signed release.
 
-# Live dashboard with API tests
-python -m src.main --live 30 --api --skip-vpn
+## Understand the results
 
-# View uptime history stats
-python -m src.main --history
+Response time measures speed, not safety or authenticity. “Blocked / challenge” and “Too many requests” do not mean a domain is offline. DNS errors and timeouts describe what this scan observed from your connection.
 
-# Skip NordVPN / GeoIP
-python -m src.main --skip-vpn --skip-geoip
+The app uses its bundled mirror inventory offline. Existing custom settings and inventory are preserved when upgrading; they are not silently replaced. Technical measurements and scan settings remain under **Show technical details** and **Advanced**. History is available in its own tab.
 
-# Custom rounds and timeout
-python -m src.main --rounds 5 --timeout 15
-```
+## Updates and support
 
-### Desktop GUI
+Open **Help & About → Check for updates**. The app checks the official GitHub release metadata only when you request it and offers the official download page. It does not download or install executable updates automatically. Checksums verify file integrity, not publisher identity.
 
-```bash
-# Development mode
-cd gui
-npm ci
-npm start
+Use **Open logs / support folder** or **Copy diagnostic summary** when requesting help. The summary excludes user paths, account tokens, configuration, and scan results. No telemetry is sent.
 
-# Production build (creates installers in gui/dist/)
-npm run build:mac    # macOS
-npm run build:win    # Windows
-npm run build:linux  # Linux
-```
+## Troubleshooting
 
-Packaged desktop apps require **Python 3.12+ and the versions in
-`requirements.txt` installed separately**. Python is not bundled or downloaded.
-The GUI checks the interpreter version, imports, and dependency minimums before
-enabling scans. Missing/incompatible Python shows installation guidance in the
-window.
+- **No useful results:** check your internet connection and retry. Some mirrors may be restricted or challenged in your region.
+- **Some results missing:** keep the successful results; retry later if needed. A missing timing is not ranked as fast.
+- **Scan engine cannot start:** use **Retry startup**. If that fails, reinstall from the official release page. You do not need to configure Python.
+- **No internet:** the window, bundled configuration, settings and history still work. Scanning and release checks need a connection.
+- **Upgrading:** settings and history are stored separately from the app and preserved. Do not remove the application-data folder when reinstalling.
 
-For a Finder-launched macOS app, create a separate environment without changing
-your system Python. For example, with the app installed in `/Applications`:
+## For developers
 
-```sh
-python3 -m venv "$HOME/.local/share/stake-mirrors-ping/python"
-"$HOME/.local/share/stake-mirrors-ping/python/bin/python" -m pip install -r "/Applications/Stake Mirrors Ping.app/Contents/Resources/requirements.txt"
-mkdir -p "$HOME/Library/Application Support/Stake Mirrors Ping"
-printf '%s\n' "$HOME/.local/share/stake-mirrors-ping/python/bin/python" > "$HOME/Library/Application Support/Stake Mirrors Ping/python-path.txt"
-```
+The Python CLI remains available. See [development and CLI instructions](docs/development.md), [desktop build/provenance details](docs/desktop-distribution.md), and the [mirror refresh workflow](docs/mirrors/refresh.md). The inventory and its provenance are unchanged by desktop packaging.
 
-Restart the app after setting the executable path. The error message shows the
-actual preference-file location for your platform. `STAKE_PYTHON` is an alternative
-absolute executable-path override for terminal launches. An explicit choice is
-validated and never silently replaced. Without one, development prefers the
-project `.venv`; packaged macOS apps try Homebrew's standard locations and then
-`python3` on PATH (Windows tries `python`). A GUI launch does not inherit an
-activated terminal environment reliably.
-
-Code/resources live under `process.resourcesPath`; writable configuration/history
-live in Electron's per-user application data directory. First launch copies the
-bundled canonical configuration, preserving an existing user configuration.
-`--user-data-dir=/absolute/directory` selects an isolated data directory for
-verification. macOS builds require **macOS 12 or newer** (older macOS versions supported by
-the former Electron runtime are no longer supported). Installers are **unsigned
-and not notarized**. Node **22.12.0+ within
-22.x** is required for development/packaging; CI pins 22.23.1.
-
-Developer-only offline rendered checks:
-
-```sh
-cd gui
-npm ci --omit=optional --registry=https://registry.npmjs.org
-npm test
-npm run test:electron
-npm run build:check -- --publish never
-npm run test:electron:packaged  # macOS app built above
-```
-
-These checks use temporary data, controlled Python environments and mocked scans.
-Playwright is not included in the packaged application. See the
-[security upgrade evidence](docs/gui-security-upgrade.md) for version selection,
-advisory remediation and compatibility notes.
-
-## Features
-
-- **Offline mirror inventory** shared by CLI and GUI, with bounded concurrent TCP/HTTP/DNS probes
-- **Explicit mirror refresh** with preview, validation, provenance, and retention of custom entries
-- **GeoIP lookup** — see where each mirror's server is located
-- **NordVPN recommendations** — best EU server city per mirror
-- **Stake API integration** — GraphQL latency via `curl_cffi` (Chrome TLS fingerprint; blocked responses remain possible)
-- **Live dashboard** — real-time auto-refreshing terminal UI with `rich.live`
-- **History tracking** — SQLite-based latency history with uptime stats
-- **Rich CLI** — color-coded sorted table, successful HTTP latency first
-- **Export** — save results to JSON or CSV
-- **Desktop GUI** — Electron-based cross-platform desktop application
-
-## Stake API setup (optional)
-
-1. Open Stake.com in your browser
-2. Open DevTools (F12) → Application → Cookies
-3. Copy the `session` cookie value
-4. Create `.env` file:
-
-   ```text
-   STAKE_SESSION_TOKEN=your_session_token_here
-   ```
-
-5. Run with `--api` flag
-
-## CLI options
-
-| Flag                | Description                               |
-| ------------------- | ----------------------------------------- |
-| `--config FILE`     | Custom config file (default: config.yaml) |
-| `--rounds N`        | Number of ping rounds (default: 3)        |
-| `--timeout N`       | Timeout in seconds (default: 10)          |
-| `--api`             | Enable Stake API latency tests            |
-| `--benchmark-bets`  | Enable $0 Dice bet latency test           |
-| `--skip-geoip`      | Skip GeoIP lookups                        |
-| `--skip-vpn`        | Skip NordVPN recommendations              |
-| `--export json/csv` | Export results to file                    |
-| `--output-dir DIR`  | Output directory (default: results/)      |
-| `--live SECONDS`    | Live dashboard with auto-refresh          |
-| `--watch SECONDS`   | Legacy continuous monitoring              |
-| `--history`         | Show uptime stats from history.db         |
-| `--no-history`      | Don't save results to history.db          |
-
-## Output example
-
-```text
-┌───┬──────────────┬────────┬─────────────────┬──────────────────┬────────┬────────┬────────┬───────┐
-│ # │ Mirror       │ Status │ IP              │ Location         │ TCP    │ HTTPS  │ API    │ Best  │
-├───┼──────────────┼────────┼─────────────────┼──────────────────┼────────┼────────┼────────┼───────┤
-│ 1 │ stake.bet 🔒 │ HTTP   │ 104.22.10.123   │ London, UK       │ 12.3ms │ 45.6ms │ 89.1ms │ 45.6ms│
-│ 2 │ stake.ac 🔒  │ HTTP   │ 172.67.182.45   │ Amsterdam, NL    │ 18.7ms │ 52.3ms │ 95.4ms │ 52.3ms│
-│ ...                                                                                              │
-└───┴──────────────┴────────┴─────────────────┴──────────────────┴────────┴────────┴────────┴───────┘
-
-🏆 LOWEST HTTP LATENCY: stake.bet — 45.6ms
-
-🎯 RECOMMENDED: NordVPN → London, UK → stake.bet (Est. 60.6ms)
-```
-
-## Config
-
-Edit `config.yaml` to add/remove mirrors, change settings, or modify NordVPN target regions.
-The [refresh guide](docs/mirrors/refresh.md) explains the explicit updater,
-source/count semantics, retained domains, validation and failure behavior.
-
-```sh
-uv run --frozen python -m src.mirror_update         # preview only
-uv run --frozen python -m src.mirror_update --apply # additive refresh
-```
-
-A responding HTTP endpoint is not proof of an authentic or healthy application.
-403, 429, redirects, and local timeouts have separate labels. The ranking metric
-is HTTP HEAD latency, with unsuccessful results last; TCP/API timings are shown
-separately. The sample below is illustrative, not a current live-health claim.
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Desktop GUI (Electron)                    │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │  Mirrors Tab │  │ Dashboard    │  │  History Tab │     │
-│  └──────────────┘  └──────────────┘  └──────────────┘     │
-└─────────────────────────────────────────────────────────────┘
-                           │ JSON-RPC
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│              Python API Bridge (src/core/api.py)             │
-└─────────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│              Core API (src/core/__init__.py)                 │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │ OrchestratorConfig | run_scan() | ScanResult        │   │
-│  │ Serializers (Pydantic) | HistoryDB                 │   │
-│  └──────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     Core Services                            │
-│  ┌─────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐        │
-│  │ Pinger  │ │ GeoIP    │ │ Stake   │ │ NordVPN  │        │
-│  └─────────┘ └──────────┘ └──────────┘ └──────────┘        │
-└─────────────────────────────────────────────────────────────┘
-```
-
-## Tech stack
-
-- Python 3.12+ with asyncio
-- Pydantic v2 (data validation and serialization)
-- curl_cffi (Chrome TLS fingerprint)
-- aiohttp + aiodns (async HTTP/DNS)
-- rich (beautiful CLI output + live dashboard)
-- SQLite (history tracking)
-- PyYAML + python-dotenv (config)
-- Electron + Node.js (desktop GUI)
-- electron-builder (cross-platform packaging)
-
-## Codex CLI
-
-Codex CLI can use the repo root `AGENTS.md` and the tracked `.codex/config.toml` defaults in this workspace.
-
----
-
-<img src="assets/readme/dot.svg" width="12" height="12" alt=""> **BLACK.TERMINAL** · [MIT License](LICENSE) · [GitHub](https://github.com/subkoks)
+[MIT License](LICENSE)

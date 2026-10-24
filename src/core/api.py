@@ -3,7 +3,10 @@
 
 import asyncio
 import json
+import platform
+import ssl
 import sys
+from importlib.metadata import version
 from pathlib import Path
 
 # Import the project's `src` package in a way that works both when this file is
@@ -23,10 +26,12 @@ else:
 from src.mirror_update import atomic_write
 from src.mirror_validation import validate_settings
 
+STREAM = False
+
 
 def print_json(data: dict) -> None:
     """Print JSON to stdout for Electron to parse."""
-    print(json.dumps(data))
+    print(json.dumps({"type": "result", "data": data} if STREAM else data))
     sys.stdout.flush()
 
 
@@ -36,7 +41,22 @@ def handle_run_scan(args_json: str) -> None:
         config_dict = json.loads(args_json)
         config = OrchestratorConfig(**config_dict)
 
-        result = asyncio.run(run_scan(config))
+        def progress(stage: str, completed: int, total: int) -> None:
+            print(
+                json.dumps(
+                    {
+                        "type": "progress",
+                        "stage": stage,
+                        "completed": completed,
+                        "total": total,
+                    }
+                ),
+                flush=True,
+            )
+
+        result = asyncio.run(
+            run_scan(config, progress=progress) if STREAM else run_scan(config)
+        )
 
         # Convert to dict for JSON serialization
         output = {
@@ -229,6 +249,10 @@ def _merge_config_update(existing: dict, new_config: dict) -> dict:
 
 def main() -> None:
     """Main entry point for JSON-RPC API."""
+    global STREAM
+    STREAM = "--stream" in sys.argv[1:]
+    if STREAM:
+        sys.argv.remove("--stream")
     if len(sys.argv) < 2:
         print_json({"success": False, "error": "No command specified"})
         sys.exit(1)
@@ -236,7 +260,32 @@ def main() -> None:
     command = sys.argv[1]
     args_json = sys.argv[2] if len(sys.argv) > 2 else "{}"
 
-    if command == "run-scan":
+    if command == "health":
+        import certifi
+        from curl_cffi import Curl
+
+        ssl.create_default_context(cafile=certifi.where())
+        curl = Curl()
+        try:
+            native = curl.version().decode("utf-8", errors="replace")
+        finally:
+            curl.close()
+        print_json(
+            {
+                "success": True,
+                "protocol": 1,
+                "version": version("stake-mirrors-ping"),
+                "python": platform.python_version(),
+                "architecture": {
+                    "AMD64": "x64",
+                    "x86_64": "x64",
+                    "aarch64": "arm64",
+                }.get(platform.machine(), platform.machine()),
+                "frozen": bool(getattr(sys, "frozen", False)),
+                "native_tls": native,
+            }
+        )
+    elif command == "run-scan":
         handle_run_scan(args_json)
     elif command == "get-history-stats":
         handle_get_history_stats(args_json)
