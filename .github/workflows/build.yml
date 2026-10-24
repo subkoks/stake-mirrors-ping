@@ -77,7 +77,13 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: desktop-app-${{ matrix.os }}
-          path: gui/dist/*
+          path: |
+            gui/dist/*.dmg
+            gui/dist/*.zip
+            gui/dist/*.exe
+            gui/dist/*.AppImage
+            gui/dist/*.deb
+            gui/dist/*.rpm
           retention-days: 14
           if-no-files-found: error
 
@@ -95,9 +101,9 @@ jobs:
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: |
-            artifacts/**/*.dmg
-            artifacts/**/*.zip
-            artifacts/**/*.exe
-            artifacts/**/*.AppImage
-            artifacts/**/*.deb
-            artifacts/**/*.rpm
+            artifacts/desktop-app-*/*.dmg
+            artifacts/desktop-app-*/*.zip
+            artifacts/desktop-app-*/*.exe
+            artifacts/desktop-app-*/*.AppImage
+            artifacts/desktop-app-*/*.deb
+            artifacts/desktop-app-*/*.rpm
