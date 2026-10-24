@@ -35,13 +35,13 @@ jobs:
       run: python -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('uv.lock').read_text()); assert all(p['source'].get('registry', 'https://pypi.org/simple') == 'https://pypi.org/simple' for p in d['package'])"
 
     - name: Lint
-      run: uv run --frozen ruff check src/ tests/
+      run: uv run --frozen --python ${{ matrix.python-version }} ruff check src/ tests/
 
     - name: CLI help (no account activity)
-      run: uv run --frozen python -m src.main --help
+      run: uv run --frozen --python ${{ matrix.python-version }} python -m src.main --help
 
     - name: Tests
-      run: uv run --frozen pytest tests/ -v
+      run: uv run --frozen --python ${{ matrix.python-version }} pytest tests/ -v
 
   security:
     runs-on: ubuntu-latest

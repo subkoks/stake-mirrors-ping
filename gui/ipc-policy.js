@@ -13,6 +13,10 @@ function object(value) {
 }
 function validatePayload(command, value = {}) {
   const input = object(value);
+  if (command === 'open-mirror') {
+    if (Object.keys(input).length !== 1 || typeof input.url !== 'string' || input.url.length > 2048) throw new Error('Invalid mirror request');
+    return { url: input.url };
+  }
   const allowed = command === 'run-scan'
     ? ['rounds', 'timeout', 'skip_geoip', 'skip_vpn', 'api_tests', 'save_history']
     : command === 'update-config' ? ['ping_rounds', 'timeout_seconds', 'concurrent_limit']

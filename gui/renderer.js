@@ -20,7 +20,7 @@ function showError(message, persistent = false) {
   div.className = 'error';
   div.textContent = message;
   container.replaceChildren(div);
-  if (!persistent) setTimeout(() => { if (div.isConnected) div.remove(); }, 5000);
+  document.getElementById("retry-startup-btn").hidden = !persistent;
 }
 
 // ----------------------------------------------------------------- helpers
@@ -66,7 +66,7 @@ function latCell(ms) {
 }
 
 function statusPill(isUp, reachability = 'legacy') {
-  const pill = el('span', `pill ${isUp ? 'up' : 'down'}`, reachability.replaceAll('_', ' '));
+  const pill = el('span', `pill ${isUp ? 'up' : 'down'}`, ({ http_responding: 'Responded', blocked_or_challenged: 'Blocked / challenge', rate_limited: 'Too many requests', dns_error: 'Address lookup failed', http_timeout: 'No response in time', connection_error: 'Connection failed' }[reachability] || reachability.replaceAll('_', ' ')));
   return pill;
 }
 
@@ -81,7 +81,16 @@ document.getElementById('run-scan-btn').addEventListener('click', async () => {
   document.getElementById('stop-scan-btn').disabled = false;
   scanStatus.hidden = false;
   scanStatus.classList.add('live');
-  scanStatus.textContent = 'Scanning';
+  scanStatus.textContent = 'Starting scan…';
+  document.getElementById('error-container').replaceChildren();
+  document.getElementById('scan-summary').textContent = '';
+  const progressBar = document.getElementById('scan-progress');
+  progressBar.hidden = false; progressBar.removeAttribute('value');
+  const unsubscribe = window.electronAPI.onScanProgress(progress => {
+    if (generation !== scanGeneration) return;
+    scanStatus.textContent = `${progress.stage} · ${progress.completed} of ${progress.total}`;
+    progressBar.max = Math.max(1, progress.total); progressBar.value = progress.completed;
+  });
 
   try {
     const config = {
@@ -100,8 +109,10 @@ document.getElementById('run-scan-btn').addEventListener('click', async () => {
       displayMirrors(result.mirrors);
       displayVPN(result.vpn_recommendations);
       updateDashboard(result);
+      const responded = result.mirrors.filter(m => m.is_up && m.best_ms != null).length;
+      document.getElementById("scan-summary").textContent = result.mirrors.length === 0 ? "No results returned. Try scanning again." : responded ? `${responded} of ${result.mirrors.length} mirrors responded. Results are sorted by response time; blocked and missing measurements follow.` : "No usable responses. Check your internet connection and try again. Blocks and timeouts do not prove a mirror is offline.";
       scanStatus.classList.remove('live');
-      scanStatus.textContent = `Scan complete · ${result.scan_id}`;
+      scanStatus.textContent = 'Scan complete';
     } else {
       showError(result.error);
       scanStatus.classList.remove('live');
@@ -113,8 +124,11 @@ document.getElementById('run-scan-btn').addEventListener('click', async () => {
     scanStatus.classList.remove('live');
     scanStatus.textContent = error.message.includes('cancelled') ? 'Scan cancelled' : 'Scan failed';
   } finally {
+    unsubscribe();
     if (generation !== scanGeneration) return;
+    document.getElementById("scan-progress").hidden = true;
     isScanning = false;
+    document.getElementById('run-scan-btn').textContent = 'Scan again';
     document.getElementById('run-scan-btn').disabled = false;
     document.getElementById('stop-scan-btn').disabled = true;
   }
@@ -128,6 +142,7 @@ document.getElementById('stop-scan-btn').addEventListener('click', async () => {
   try {
     await window.electronAPI.stopScan();
     scanStatus.textContent = 'Scan cancelled';
+    document.getElementById('scan-progress').hidden = true;
     scanStatus.classList.remove('live');
   } catch (error) { showError(error.message); }
   finally {
@@ -154,12 +169,16 @@ function displayMirrors(mirrors) {
     const statusTd = el('td');
     statusTd.appendChild(statusPill(mirror.is_up, mirror.reachability));
     row.appendChild(statusTd);
-    row.appendChild(el('td', 'mono', mirror.ip_address || '—'));
+    row.appendChild(el('td', 'mono technical', mirror.ip_address || '—'));
     row.appendChild(el('td', null, mirror.server_location || '—'));
-    row.appendChild(td(latCell(mirror.tcp_ms)));
+    const tcp = td(latCell(mirror.tcp_ms)); tcp.className = 'technical'; row.appendChild(tcp);
     row.appendChild(td(latCell(mirror.https_ms)));
-    row.appendChild(td(latCell(mirror.api_ms)));
-    row.appendChild(td(latCell(mirror.best_ms)));
+    const api = td(latCell(mirror.api_ms)); api.className = 'technical'; row.appendChild(api);
+    const best = td(latCell(mirror.best_ms)); best.className = 'technical'; row.appendChild(best);
+    const open = el('button', null, 'Open mirror');
+    open.setAttribute('aria-label', `Open ${mirror.domain} in your browser`);
+    open.addEventListener('click', () => window.electronAPI.openMirror(mirror.url).catch(error => showError(error.message)));
+    row.appendChild(td(open));
     tbody.appendChild(row);
   });
 }
@@ -329,11 +348,14 @@ function bindRange(id) {
 bindRange('rounds');
 bindRange('timeout');
 
-// Load canonical configuration and surface runtime prerequisites before enabling scans.
+// Load canonical configuration from the bundled scan engine.
+function initialize() {
 document.getElementById('run-scan-btn').disabled = true;
+document.getElementById('retry-startup-btn').hidden = true;
+document.getElementById('error-container').replaceChildren();
 window.electronAPI.getConfig().then(result => {
   if (!result.success) throw new Error(result.error || 'Configuration could not load');
-  document.getElementById('inventory-count').textContent = `${result.config.mirrors.length} configured destinations · application identity unverified`;
+  document.getElementById('inventory-count').textContent = `${result.config.mirrors.length} mirrors ready to check`;
   document.getElementById('stat-total').textContent = result.config.mirrors.length;
   for (const [id, key] of [['rounds', 'ping_rounds'], ['timeout', 'timeout_seconds']]) {
     const value = result.config.settings?.[key];
@@ -345,6 +367,31 @@ window.electronAPI.getConfig().then(result => {
   }
   document.getElementById('run-scan-btn').disabled = false;
 }).catch(error => {
-  document.getElementById('inventory-count').textContent = 'Python runtime configuration required';
+  document.getElementById('inventory-count').textContent = 'The scan engine could not start';
   showError(error.message, true);
+});
+
+}
+initialize();
+document.getElementById('retry-startup-btn').addEventListener('click', initialize);
+document.getElementById('technical-details').addEventListener('change', event => document.body.classList.toggle('show-technical', event.target.checked));
+window.electronAPI.appInfo().then(info => { document.getElementById('app-version').textContent = `Stake Mirrors Ping ${info.version} · ${info.platform} ${info.architecture}`; }).catch(error => showError(error.message));
+for (const [id, action, message] of [
+  ['open-support-btn', 'openSupport', 'Support folder opened'],
+  ['copy-diagnostics-btn', 'copyDiagnostics', 'Diagnostic summary copied. No settings, paths, or scan results are included.'],
+  ['open-release-btn', 'openRelease', 'Official download page opened'],
+]) {
+  document.getElementById(id).addEventListener('click', async () => {
+    try { await window.electronAPI[action](); document.getElementById('support-status').textContent = message; }
+    catch (error) { showError(error.message); }
+  });
+}
+document.getElementById('check-updates-btn').addEventListener('click', async event => {
+  event.target.disabled = true;
+  const status = document.getElementById('update-status'); status.textContent = 'Checking official releases…';
+  try {
+    const result = await window.electronAPI.checkUpdates();
+    status.textContent = result.available ? `Version ${result.version} is available. Open official downloads to install it. Your settings and history will be preserved.` : 'You have the latest released version (or a newer development build).';
+  } catch (error) { status.textContent = error.message; }
+  finally { event.target.disabled = false; }
 });

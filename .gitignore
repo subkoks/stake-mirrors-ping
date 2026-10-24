@@ -31,3 +31,9 @@ dist/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
+
+packaging/output/
+!packaging/*.json
+!gui/e2e/*.json
+
+gui/dist-fixture/

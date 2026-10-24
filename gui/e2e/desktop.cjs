@@ -1,0 +1,115 @@
+// Run against an actual packaged/installed executable. Production and fixture builds are separate.
+const { _electron: electron } = require('playwright');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
+const { execFileSync } = require('node:child_process');
+const fixture = process.argv.includes('--fixture');
+const executable = process.env.STAKE_DESKTOP_EXECUTABLE;
+if (!executable || !path.isAbsolute(executable)) throw new Error('Set STAKE_DESKTOP_EXECUTABLE to the installed application');
+const base = fs.mkdtempSync(path.join(process.env.STAKE_E2E_OUTPUT || os.tmpdir(), 'stake-desktop-é-'));
+const data = path.join(base, 'Saved data Å'); fs.mkdirSync(data);
+fs.writeFileSync(path.join(data, 'python-path.txt'), path.join(base, 'nonexistent-python'));
+let app; let page; let passed = 0; const errors = [];
+const env = { ...process.env, STAKE_PYTHON: path.join(base, 'nonexistent-python'), PYTHONPATH: base };
+for (const key of ['VIRTUAL_ENV', 'CONDA_PREFIX', 'STAKE_SESSION_TOKEN', 'STAKE_TRUSTED_DOMAINS']) delete env[key];
+function gone(pid) { try { process.kill(pid, 0); return false; } catch { return true; } }
+async function check(name, action) { await action(); console.log('PASS ' + name); passed++; }
+async function launch() {
+  const started = Date.now();
+  app = await electron.launch({ executablePath: executable, args: [`--user-data-dir=${data}`, ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], env, cwd: base, timeout: 45000 });
+  page = await app.firstWindow(); page.on('pageerror', error => errors.push(error.message));
+  await page.locator('#run-scan-btn:enabled').waitFor({ timeout: 30000 });
+  console.log(`READY_MS ${Date.now() - started}`);
+}
+async function scenario(mode) { fs.writeFileSync(path.join(data, 'scenario.txt'), mode); }
+async function scan(mode) {
+  await scenario(mode); await page.locator('#run-scan-btn').click();
+  await page.locator('#scan-status').filter({ hasText: 'Scan complete' }).waitFor({ timeout: 20000 });
+}
+(async () => {
+ try {
+  await launch();
+  await check('packaged launch uses bundled backend despite invalid external Python preferences', async () => {
+    const info = await page.evaluate(() => window.electronAPI.appInfo());
+    assert.equal(info.backend, 'bundled'); assert.equal(info.version, '2.1.0');
+    assert.match(await page.locator('#inventory-count').innerText(), /mirrors ready/);
+    assert.equal(await app.evaluate(() => process.versions.electron), require('../package.json').devDependencies.electron);
+    const health = await app.evaluate(({ app }) => {
+      const path = process.getBuiltinModule('path'); const fs = process.getBuiltinModule('fs'); const cp = process.getBuiltinModule('child_process');
+      const resource = process.resourcesPath;
+      const manifest = JSON.parse(fs.readFileSync(path.join(resource, 'backend/provenance.json')));
+      const result = JSON.parse(cp.execFileSync(path.join(resource, 'backend', process.platform === 'win32' ? 'stake-backend.exe' : 'stake-backend'), ['health'], { encoding: 'utf8', windowsHide: true }));
+      return { manifest, result, packaged: app.isPackaged };
+    });
+    assert.ok(health.packaged && health.result.frozen); assert.equal(health.manifest.fixture, fixture);
+    assert.equal(health.result.architecture, process.arch); assert.match(health.result.native_tls, /curl/i);
+  });
+  await check('settings persist across application restart with existing user data', async () => {
+    await page.locator('[data-panel="settings"]').click();
+    await page.locator('#timeout').fill('17'); await page.locator('#save-settings-btn').click();
+    await page.locator('#save-settings-btn').filter({ hasText: 'Saved' }).waitFor();
+    await app.close(); await launch();
+    assert.equal(await page.locator('#timeout').inputValue(), '17');
+    assert.ok(fs.existsSync(path.join(data, 'python-path.txt')));
+  });
+  await check('help and redacted diagnostics are GUI accessible; unsafe external links are rejected', async () => {
+    await page.locator('[data-panel="help"]').click(); assert.match(await page.locator('#app-version').innerText(), /2.1.0/);
+    await page.locator('#copy-diagnostics-btn').click(); await page.locator('#support-status').filter({ hasText: 'copied' }).waitFor();
+    const summary = await app.evaluate(({ clipboard }) => clipboard.readText());
+    assert.ok(!summary.includes(base) && !summary.includes('nonexistent-python'));
+    for (const url of ['javascript:alert(1)', 'file:///etc/passwd', 'https://127.0.0.1']) {
+      assert.equal(await page.evaluate(url => window.electronAPI.openMirror(url).then(() => false, () => true), url), true);
+    }
+  });
+  if (fixture) {
+    await page.locator('[data-panel="mirrors"]').click();
+    await check('measured progress, sorted partial results, blocked and rate-limit states', async () => {
+      await scenario('partial'); await page.locator('#run-scan-btn').click();
+      await page.locator('#scan-status').filter({ hasText: 'of' }).waitFor();
+      await page.locator('#scan-status').filter({ hasText: 'Scan complete' }).waitFor();
+      const rows = page.locator('#mirrors-body tr'); assert.ok(await rows.count() > 10);
+      assert.match(await page.locator('#mirrors-body').innerText(), /Blocked \/ challenge/);
+      assert.match(await page.locator('#mirrors-body').innerText(), /Too many requests/);
+      const values = await page.locator('#mirrors-body tr td:nth-child(6)').allTextContents();
+      const numeric = values.filter(v => v.includes('ms')).map(parseFloat); assert.deepEqual(numeric, [...numeric].sort((a,b) => a-b));
+      await page.screenshot({ path: path.join(base, 'desktop-results.png'), animations: 'disabled' });
+    });
+    await check('history is saved and available from the GUI', async () => {
+      await page.locator('[data-panel="history"]').click(); await page.locator('#load-history-btn').click();
+      await page.locator('#history-body tr').filter({ hasText: 'stake' }).first().waitFor();
+      await page.locator('[data-panel="mirrors"]').click();
+    });
+    await check('cancel and restart cannot mix results; child process exits', async () => {
+      await scenario('slow'); await page.locator('#run-scan-btn').click();
+      await page.locator('#scan-status').filter({ hasText: 'of' }).waitFor();
+      const pid = Number(fs.readFileSync(path.join(data, 'scan.pid')));
+      await page.locator('#stop-scan-btn').click(); await page.locator('#run-scan-btn:enabled').waitFor();
+      assert.ok(gone(pid)); await scan('partial');
+    });
+    await check('no internet, empty results and backend failures offer recovery', async () => {
+      await scan('offline'); assert.match(await page.locator('#scan-summary').innerText(), /Check your internet/);
+      await scan('empty'); assert.match(await page.locator('#scan-summary').innerText(), /No results/);
+      await scenario('failure'); await page.locator('#run-scan-btn').click();
+      await page.locator('#scan-status').filter({ hasText: 'Scan failed' }).waitFor();
+      await scan('partial');
+    });
+    await check('keyboard focus and 150 percent scaling remain usable', async () => {
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.setZoomFactor(1.5));
+      await page.locator('#run-scan-btn').focus(); assert.equal(await page.locator('#run-scan-btn').evaluate(node => node === document.activeElement), true);
+      await page.keyboard.press('Tab'); assert.equal(await page.locator('#stop-scan-btn').isDisabled(), true);
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.setZoomFactor(1));
+    });
+    await check('app shutdown terminates the active scan', async () => {
+      await scenario('slow'); await page.locator('#run-scan-btn').click(); await page.locator('#scan-status').filter({ hasText: 'of' }).waitFor();
+      const pid = Number(fs.readFileSync(path.join(data, 'scan.pid'))); await app.close(); app = null; assert.ok(gone(pid));
+    });
+  }
+  assert.deepEqual(errors, []);
+  console.log(`${passed} packaged desktop scenarios passed; diagnostics ${base}`);
+ } catch (error) {
+  if (page) await page.screenshot({ path: path.join(base, 'failure.png') }).catch(() => {});
+  console.error(error); process.exitCode = 1;
+ } finally { if (app) await app.close().catch(() => {}); }
+})();

@@ -21,44 +21,51 @@
       </span>
       <div>
         <h1>Stake Mirrors Ping</h1>
-        <div class="sub">Latency Intelligence</div>
+        <div class="sub">Find a responsive mirror</div>
       </div>
     </div>
     <nav class="tabs" aria-label="Sections">
       <button class="tab active" data-panel="mirrors">Mirrors</button>
       <button class="tab" data-panel="dashboard">Dashboard</button>
       <button class="tab" data-panel="history">History</button>
-      <button class="tab" data-panel="settings">Settings</button>
+      <button class="tab" data-panel="settings">Advanced</button>
+      <button class="tab" data-panel="help">Help &amp; About</button>
     </nav>
   </header>
 
   <main>
     <div id="error-container" role="alert"></div>
+    <button id="retry-startup-btn" hidden>Retry startup</button>
     <p id="inventory-count" role="status">Loading configuration…</p>
 
     <!-- Mirrors Panel -->
     <section id="mirrors" class="panel active">
       <div class="controls">
-        <button id="run-scan-btn" class="primary">▶ Run Scan</button>
-        <button id="stop-scan-btn" class="danger" disabled>■ Stop</button>
-        <span id="scan-status" class="scan-status" hidden></span>
+        <button id="run-scan-btn" class="primary">Start scan</button>
+        <button id="stop-scan-btn" class="danger" disabled>Cancel</button>
+        <span id="scan-status" class="scan-status" role="status" hidden></span>
       </div>
+      <p class="hint">Response time measures speed, not safety or authenticity. A blocked response does not prove a mirror is offline.</p>
+      <label><input id="technical-details" type="checkbox"> Show technical details</label>
+      <progress id="scan-progress" max="1" value="0" hidden aria-label="Mirrors checked"></progress>
+      <p id="scan-summary" role="status"></p>
       <div class="table-wrap">
         <table id="mirrors-table">
           <thead>
             <tr>
               <th>Mirror</th>
               <th>Status</th>
-              <th>IP</th>
+              <th class="technical">IP</th>
               <th>Location</th>
-              <th>TCP</th>
-              <th>HTTPS</th>
-              <th>API</th>
-              <th>Best</th>
+              <th class="technical">TCP</th>
+              <th>Response time</th>
+              <th class="technical">API</th>
+              <th class="technical">Best</th>
+              <th>Open</th>
             </tr>
           </thead>
           <tbody id="mirrors-body">
-            <tr><td colspan="8" class="empty">Click “Run Scan” to begin</td></tr>
+            <tr><td colspan="9" class="empty">Click “Start scan” to check the configured mirrors</td></tr>
           </tbody>
         </table>
       </div>
@@ -128,6 +135,18 @@
       </div>
     </section>
 
+    <section id="help" class="panel">
+      <h2>Help &amp; About</h2>
+      <p id="app-version">Loading version…</p>
+      <p>This app measures network response times. It does not confirm site authenticity. No login is needed to scan.</p>
+      <button id="check-updates-btn">Check for updates</button>
+      <button id="open-release-btn">Open official downloads</button>
+      <p id="update-status" role="status"></p>
+      <button id="open-support-btn">Open logs / support folder</button>
+      <button id="copy-diagnostics-btn">Copy diagnostic summary</button>
+      <p id="support-status" role="status"></p>
+      <p>Having trouble? Retry the scan, check your internet connection, or reinstall from the official download page. Saved settings and history are stored separately from the application.</p>
+    </section>
     <!-- Settings Panel -->
     <section id="settings" class="panel">
       <div class="card settings-form">
