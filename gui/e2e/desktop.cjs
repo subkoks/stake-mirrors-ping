@@ -4,7 +4,6 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const { execFileSync } = require('node:child_process');
 const fixture = process.argv.includes('--fixture');
 const executable = process.env.STAKE_DESKTOP_EXECUTABLE;
 if (!executable || !path.isAbsolute(executable)) throw new Error('Set STAKE_DESKTOP_EXECUTABLE to the installed application');
@@ -16,11 +15,11 @@ const env = { ...process.env, STAKE_PYTHON: path.join(base, 'nonexistent-python'
 for (const key of ['VIRTUAL_ENV', 'CONDA_PREFIX', 'STAKE_SESSION_TOKEN', 'STAKE_TRUSTED_DOMAINS']) delete env[key];
 function gone(pid) { try { process.kill(pid, 0); return false; } catch { return true; } }
 async function check(name, action) { await action(); console.log('PASS ' + name); passed++; }
-async function launch() {
+async function launch(ready = true) {
   const started = Date.now();
   app = await electron.launch({ executablePath: executable, args: [`--user-data-dir=${data}`, ...(process.platform === 'linux' && process.env.STAKE_E2E_SANDBOX !== '1' ? ['--no-sandbox'] : [])], env, cwd: base, timeout: 45000 });
   page = await app.firstWindow(); page.on('pageerror', error => errors.push(error.message));
-  await page.locator('#run-scan-btn:enabled').waitFor({ timeout: 30000 });
+  if (ready) await page.locator('#run-scan-btn:enabled').waitFor({ timeout: 30000 });
   console.log(`READY_MS ${Date.now() - started}`);
 }
 async function scenario(mode) { fs.writeFileSync(path.join(data, 'scenario.txt'), mode); if (mode === 'partial') fs.rmSync(path.join(data, 'continue-scan'), { force:true }); }
@@ -44,7 +43,7 @@ async function scan(mode) {
       const result = JSON.parse(cp.execFileSync(path.join(resource, 'backend', process.platform === 'win32' ? 'stake-backend.exe' : 'stake-backend'), ['health'], { encoding: 'utf8', windowsHide: true }));
       return { manifest, result, packaged: app.isPackaged };
     });
-    assert.ok(health.packaged && health.result.frozen); assert.equal(health.manifest.fixture, fixture);
+    assert.ok(health.packaged && health.result.frozen); assert.equal(health.result.python, '3.13.16'); assert.equal(health.manifest.fixture, fixture);
     assert.equal(health.result.architecture, process.arch); assert.match(health.result.native_tls, /curl/i);
   });
   await check('settings persist across application restart with existing user data', async () => {
@@ -133,6 +132,22 @@ async function scan(mode) {
       await scenario('slow'); await page.locator('#run-scan-btn').click(); await page.locator('#scan-status').filter({ hasText: 'of' }).waitFor();
       const pid = Number(fs.readFileSync(path.join(data, 'scan.pid'))); await app.close(); app = null; assert.ok(gone(pid));
     });
+  }
+  if (!fixture) {
+    const resource = await app.evaluate(() => process.resourcesPath);
+    const engine = path.join(resource,'backend',process.platform === 'win32' ? 'stake-backend.exe' : 'stake-backend');
+    let writable = true; try { fs.accessSync(engine, fs.constants.W_OK); } catch { writable = false; }
+    if (writable) await check('missing bundled engine gives actionable error and retry recovers without touching user data', async () => {
+      await app.close(); app = null; fs.renameSync(engine,engine+'.unavailable');
+      try {
+        await launch(false); await page.locator('#error-container').filter({ hasText:'reinstall' }).waitFor({ timeout:30000 });
+        assert.equal(await page.locator('#run-scan-btn').isDisabled(),true);
+        fs.renameSync(engine+'.unavailable',engine);
+        await page.locator('#retry-startup-btn').click(); await page.locator('#run-scan-btn:enabled').waitFor({timeout:30000});
+        assert.equal(await page.locator('#timeout').inputValue(),'17');
+      } finally { if (fs.existsSync(engine+'.unavailable')) fs.renameSync(engine+'.unavailable',engine); }
+    });
+    else console.log('NOT_RUN engine mutation: installed files are read-only for the clean-environment user; covered by the writable disposable installation checks.');
   }
   assert.deepEqual(errors, []);
   console.log(`${passed} packaged desktop scenarios passed; diagnostics ${base}`);

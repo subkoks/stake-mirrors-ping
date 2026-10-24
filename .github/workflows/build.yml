@@ -7,6 +7,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -29,6 +33,7 @@ jobs:
             platform: linux
             arch: x64
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       MACOSX_DEPLOYMENT_TARGET: '13.0'
