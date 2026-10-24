@@ -106,3 +106,9 @@ include = ["src", "src.*"]
 
 [tool.setuptools.data-files]
 "share/stake-mirrors-ping" = ["config.yaml"]
+
+# Keep workstation-level registry defaults out of this public project's lockfile.
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true
