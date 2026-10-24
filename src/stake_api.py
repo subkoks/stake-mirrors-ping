@@ -1,10 +1,14 @@
 import asyncio
 import json
+import socket
 import time
+from urllib.parse import urlsplit
 
+from curl_cffi import CurlOpt
 from curl_cffi import requests as cffi_requests
 from rich.console import Console
 
+from .mirror_validation import PublicResolver, normalize_destination
 from .models import MirrorConfig, PingResult
 
 console = Console()
@@ -46,6 +50,27 @@ def _cffi_post(
 ) -> tuple[int, dict | None]:
     """Synchronous curl_cffi POST with Chrome TLS fingerprint."""
     try:
+        parsed = urlsplit(url)
+        host, _ = normalize_destination(
+            parsed.hostname or "", f"{parsed.scheme}://{parsed.netloc}"
+        )
+        if (
+            parsed.scheme != "https"
+            or parsed.path != GRAPHQL_PATH
+            or parsed.query
+            or parsed.fragment
+        ):
+            return 0, None
+
+        async def resolve():
+            return await PublicResolver(timeout).resolve(
+                host, parsed.port or 443, socket.AF_UNSPEC
+            )
+
+        records = asyncio.run(resolve())
+        addresses = ",".join(
+            f"[{r['host']}]" if ":" in r["host"] else r["host"] for r in records
+        )
         r = cffi_requests.post(
             url,
             data=payload,
@@ -53,6 +78,11 @@ def _cffi_post(
             cookies=cookies,
             impersonate="chrome",
             timeout=timeout,
+            allow_redirects=False,
+            curl_options={
+                CurlOpt.RESOLVE: [f"{host}:{parsed.port or 443}:{addresses}"],
+                CurlOpt.PROXY: "",  # Environment proxies cannot bypass address validation.
+            },
             verify=True,  # never disable cert verification when sending the token
         )
         return r.status_code, r.json() if r.status_code == 200 else None
@@ -66,9 +96,14 @@ def _require_trusted(mirror: MirrorConfig) -> bool:
     The Stake session token grants real-money account access. Sending it to an
     unverified mirror (a lapsed/squatted/phishing domain) is account takeover.
     Only mirrors explicitly marked ``trusted`` in config / STAKE_TRUSTED_DOMAINS
-    receive it; everything else is ranked by unauthenticated TCP/HTTPS latency.
+    receive it; everything else is ranked by unauthenticated HTTP response latency.
     """
-    if not mirror.trusted:
+    try:
+        _, url = normalize_destination(mirror.domain, mirror.url)
+        valid = url.startswith("https://")
+    except ValueError:
+        valid = False
+    if not mirror.trusted or not valid:
         console.print(
             f"[yellow]⚠ Skipping authenticated API test for untrusted mirror "
             f"{mirror.domain} — token withheld. Add it to "
@@ -196,7 +231,7 @@ async def enrich_with_api_tests(
         if up_results:
             console.print(
                 "[yellow]⚠ No trusted mirrors configured — skipping API tests. "
-                "Mirrors are still ranked by TCP/HTTPS latency.[/]"
+                "Mirrors are still ranked by HTTP response latency.[/]"
             )
         return results
 

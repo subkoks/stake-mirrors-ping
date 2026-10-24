@@ -1,0 +1,244 @@
+source: https://mirrorslist.playstake.io/mirror-list.json
+directory: https://playstake.fans/
+retrieved_at: '2026-10-24T13:32:17.015330+00:00'
+listed_count: 118
+listed_domains:
+- stake.com
+- stake.jp
+- stake.bet
+- stake.ceo
+- stake.games
+- stake.mba
+- stake.krd
+- stake.bz
+- stake.ac
+- stake.pet
+- staketr.com
+- stakeru8.com
+- stake1017.com
+- stake1020.com
+- stake1021.com
+- stake1022.com
+- stake1034.com
+- stake1035.com
+- stake1036.com
+- stake1037.com
+- stake1038.com
+- stake1048.com
+- stake1061.com
+- stake1052.com
+- stake1043.com
+- stake1039.com
+- stake1057.com
+- stake1066.com
+- stake1067.com
+- stake1068.com
+- stake1069.com
+- stake1072.com
+- stake1073.com
+- stake1074.com
+- stake1077.com
+- stake1079.com
+- stake1080.com
+- stake3090.com
+- stake3094.com
+- stake3079.com
+- stake3046.com
+- stkmirror.com
+- stake3082.com
+- stake3067.com
+- stake3043.com
+- stake3199.com
+- stake3099.com
+- stake3098.com
+- stake3088.com
+- stake3087.com
+- stake3077.com
+- stake3072.com
+- stake3075.com
+- stake3070.com
+- stake3069.com
+- stake3065.com
+- stake3064.com
+- stake3062.com
+- stake3061.com
+- stake3058.com
+- stake3056.com
+- stake3053.com
+- stake3051.com
+- stake3050.com
+- stake3048.com
+- stake3047.com
+- stake3045.com
+- stake3041.com
+- stake3040.com
+- stake3039.com
+- stake3035.com
+- stake1070.com
+- stake1071.com
+- stake1090.com
+- stake1088.com
+- stake1083.com
+- stake3033.com
+- stake3030.com
+- stake3029.com
+- stake3028.com
+- stake3027.com
+- stake3026.com
+- stake3020.com
+- stake3019.com
+- stake3018.com
+- stake3017.com
+- stake3015.com
+- stake3014.com
+- stake3013.com
+- stake3012.com
+- stake3011.com
+- stake3007.com
+- stake3004.com
+- stake1094.com
+- stake3000.com
+- stake3001.com
+- stake3003.com
+- stake3002.com
+- stake3005.com
+- stake3009.com
+- stake3016.com
+- stake3083.com
+- stake3086.com
+- stake3084.com
+- stake3085.com
+- stake3080.com
+- stake3103.com
+- stake3109.com
+- stake3112.com
+- stake3107.com
+- stake3114.com
+- stake3104.com
+- stake3119.com
+- stake3116.com
+- stake3106.com
+- stake3102.com
+- stake3105.com
+- stake3108.com
+config_sha256: 1dff58cdbde2ca62ecdf5217cbf2715c56810ca24befc6ae2e4b1822ad1de209
+diff:
+  listed_count: 118
+  added:
+  - stake.com
+  - stake1020.com
+  - stake1021.com
+  - stake1034.com
+  - stake1035.com
+  - stake1036.com
+  - stake1037.com
+  - stake1038.com
+  - stake1043.com
+  - stake1048.com
+  - stake1052.com
+  - stake1057.com
+  - stake1061.com
+  - stake1066.com
+  - stake1067.com
+  - stake1068.com
+  - stake1069.com
+  - stake1070.com
+  - stake1071.com
+  - stake1072.com
+  - stake1073.com
+  - stake1074.com
+  - stake1077.com
+  - stake1079.com
+  - stake1080.com
+  - stake1083.com
+  - stake1088.com
+  - stake1090.com
+  - stake1094.com
+  - stake3000.com
+  - stake3001.com
+  - stake3002.com
+  - stake3003.com
+  - stake3004.com
+  - stake3005.com
+  - stake3007.com
+  - stake3009.com
+  - stake3011.com
+  - stake3012.com
+  - stake3013.com
+  - stake3014.com
+  - stake3015.com
+  - stake3016.com
+  - stake3017.com
+  - stake3018.com
+  - stake3019.com
+  - stake3020.com
+  - stake3026.com
+  - stake3027.com
+  - stake3028.com
+  - stake3029.com
+  - stake3030.com
+  - stake3033.com
+  - stake3035.com
+  - stake3039.com
+  - stake3040.com
+  - stake3041.com
+  - stake3043.com
+  - stake3045.com
+  - stake3046.com
+  - stake3047.com
+  - stake3048.com
+  - stake3050.com
+  - stake3051.com
+  - stake3053.com
+  - stake3056.com
+  - stake3058.com
+  - stake3061.com
+  - stake3062.com
+  - stake3064.com
+  - stake3065.com
+  - stake3067.com
+  - stake3069.com
+  - stake3070.com
+  - stake3072.com
+  - stake3075.com
+  - stake3077.com
+  - stake3079.com
+  - stake3080.com
+  - stake3082.com
+  - stake3083.com
+  - stake3084.com
+  - stake3085.com
+  - stake3086.com
+  - stake3087.com
+  - stake3088.com
+  - stake3090.com
+  - stake3094.com
+  - stake3098.com
+  - stake3099.com
+  - stake3102.com
+  - stake3103.com
+  - stake3104.com
+  - stake3105.com
+  - stake3106.com
+  - stake3107.com
+  - stake3108.com
+  - stake3109.com
+  - stake3112.com
+  - stake3114.com
+  - stake3116.com
+  - stake3119.com
+  - stake3199.com
+  - stakeru8.com
+  - stkmirror.com
+  retained_not_listed:
+  - stake1001.com
+  - stake1002.com
+  - stake1003.com
+  missing_from_previous_source:
+  - stake1001.com
+  - stake1002.com
+  - stake1003.com
+  removed: []
+  requires_review: true
+  configured_count: 121
+  initial_retention_approved: true

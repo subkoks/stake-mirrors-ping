@@ -12,6 +12,8 @@ class MirrorResultSchema(BaseModel):
 
     domain: str
     url: str
+    reachability: str = "unknown"
+    application_status: str = "unverified"
     is_up: bool
     ip_address: str | None = None
     server_location: str | None = None

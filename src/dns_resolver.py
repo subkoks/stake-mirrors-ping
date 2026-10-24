@@ -55,12 +55,16 @@ async def enrich_with_geoip(
     """Add GeoIP data to all ping results (concurrent, rate-limit bounded)."""
     sem = asyncio.Semaphore(concurrency)
 
-    async def _one(result: PingResult) -> None:
-        if result.ip_address:
-            async with sem:
-                geo = await geoip_lookup(result.ip_address, session)
-            _apply_geoip(result, geo)
+    async def one_ip(ip: str) -> tuple[str, dict]:
+        async with sem:
+            return ip, await geoip_lookup(ip, session)
 
     async with aiohttp.ClientSession() as session:
-        await asyncio.gather(*(_one(r) for r in results))
+        lookups = await asyncio.gather(
+            *(one_ip(ip) for ip in {r.ip_address for r in results if r.ip_address})
+        )
+    cache = dict(lookups)
+    for result in results:
+        if result.ip_address:
+            _apply_geoip(result, cache.get(result.ip_address, {}))
     return results

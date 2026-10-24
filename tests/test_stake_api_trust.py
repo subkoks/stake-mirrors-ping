@@ -50,3 +50,53 @@ def test_enrich_only_posts_to_trusted_mirrors():
 
     assert all("trusted.example" in u for u in posted_urls)
     assert not any("evil.example" in u for u in posted_urls)
+
+
+def test_trusted_label_with_mismatched_url_never_posts():
+    mirror = MirrorConfig("trusted.example", "https://evil.example", trusted=True)
+    with patch("src.stake_api._cffi_post") as post:
+        assert (
+            asyncio.run(api_latency_test(mirror, "FAKE-TEST-TOKEN", rounds=1)) is None
+        )
+    post.assert_not_called()
+
+
+def test_authenticated_sink_pins_public_dns_and_disables_redirects():
+    from unittest.mock import AsyncMock, MagicMock
+
+    from curl_cffi import CurlOpt
+
+    from src.stake_api import _cffi_post
+
+    response = MagicMock(status_code=302)
+    with (
+        patch(
+            "src.stake_api.PublicResolver.resolve",
+            AsyncMock(return_value=[{"host": "1.1.1.1"}]),
+        ),
+        patch("src.stake_api.cffi_requests.post", return_value=response) as post,
+    ):
+        assert _cffi_post("https://example.com/_api/graphql", "{}", {}, {}) == (
+            302,
+            None,
+        )
+    options = post.call_args.kwargs
+    assert options["allow_redirects"] is False and options["verify"] is True
+    assert options["curl_options"][CurlOpt.PROXY] == ""
+    assert options["curl_options"][CurlOpt.RESOLVE] == ["example.com:443:1.1.1.1"]
+
+
+def test_authenticated_sink_rejects_private_dns():
+    from unittest.mock import AsyncMock
+
+    from src.stake_api import _cffi_post
+
+    with (
+        patch(
+            "src.stake_api.PublicResolver.resolve",
+            AsyncMock(side_effect=ValueError("private")),
+        ),
+        patch("src.stake_api.cffi_requests.post") as post,
+    ):
+        assert _cffi_post("https://example.com/_api/graphql", "{}", {}, {}) == (0, None)
+    post.assert_not_called()

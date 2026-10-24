@@ -3,6 +3,7 @@
 
 import asyncio
 import os
+import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +12,11 @@ import yaml
 
 from ..dns_resolver import enrich_with_geoip
 from ..history import DB_PATH, HistoryDB
+from ..mirror_validation import (
+    normalize_destination,
+    normalize_hostname,
+    validate_settings,
+)
 from ..models import MirrorConfig, PingResult, VPNRecommendation
 from ..nordvpn import get_vpn_recommendations
 from ..pinger import ping_all_mirrors
@@ -24,7 +30,7 @@ class OrchestratorConfig:
     config_path: str = "config.yaml"
     rounds: int | None = None
     timeout: float | None = None
-    concurrency: int = 16
+    concurrency: int | None = None
     skip_geoip: bool = False
     skip_vpn: bool = False
     api_tests: bool = False
@@ -47,6 +53,11 @@ def load_config(config_path: str = "config.yaml") -> dict:
         alt = project_root / config_path
         if alt.exists():
             path = alt
+        elif (
+            config_path == "config.yaml"
+            and (Path(sys.prefix) / "share/stake-mirrors-ping/config.yaml").exists()
+        ):
+            path = Path(sys.prefix) / "share/stake-mirrors-ping/config.yaml"
         else:
             raise FileNotFoundError(f"Config file not found: {config_path}")
     with open(path) as f:
@@ -68,20 +79,29 @@ def resolve_trusted_domains(config: dict) -> set[str]:
     }
     env_value = os.getenv("STAKE_TRUSTED_DOMAINS", "")
     trusted |= {d.strip().lower() for d in env_value.split(",") if d.strip()}
-    return trusted
+    return {normalize_hostname(d) for d in trusted}
 
 
 def parse_mirrors(config: dict) -> list[MirrorConfig]:
     """Parse mirror list from config, flagging trusted (token-eligible) hosts."""
     trusted_domains = resolve_trusted_domains(config)
-    return [
-        MirrorConfig(
-            domain=m["domain"],
-            url=m["url"],
-            trusted=m["domain"].strip().lower() in trusted_domains,
+    mirrors = []
+    seen = set()
+    for entry in config.get("mirrors", []):
+        domain, url = normalize_destination(entry["domain"], entry["url"])
+        if domain in seen:
+            raise ValueError(f"Duplicate mirror hostname: {domain}")
+        seen.add(domain)
+        mirrors.append(
+            MirrorConfig(
+                domain=domain,
+                url=url,
+                trusted=domain in trusted_domains and url.startswith("https://"),
+            )
         )
-        for m in config.get("mirrors", [])
-    ]
+    if not mirrors:
+        raise ValueError("Mirror configuration must not be empty")
+    return mirrors
 
 
 @dataclass
@@ -112,9 +132,15 @@ async def run_scan(config: OrchestratorConfig) -> ScanResult:
     settings = yaml_config.get("settings", {})
     nordvpn_config = yaml_config.get("nordvpn", {})
 
-    rounds = config.rounds or settings.get("ping_rounds", 3)
-    timeout = config.timeout or settings.get("timeout_seconds", 10)
-    concurrency = config.concurrency
+    rounds, timeout, concurrency = validate_settings(
+        config.rounds if config.rounds is not None else settings.get("ping_rounds", 3),
+        config.timeout
+        if config.timeout is not None
+        else settings.get("timeout_seconds", 10),
+        config.concurrency
+        if config.concurrency is not None
+        else settings.get("concurrent_limit", 16),
+    )
 
     # Step 1: Ping all mirrors
     results = await ping_all_mirrors(
@@ -180,7 +206,7 @@ async def orchestrate(args) -> None:
     )
 
     console = Console()
-    session_token = os.getenv("STAKE_SESSION_TOKEN")
+    session_token = os.getenv("STAKE_SESSION_TOKEN") if args.api else None
 
     # --history: show stats and exit
     if args.history:
@@ -227,9 +253,13 @@ async def orchestrate(args) -> None:
     settings = yaml_config.get("settings", {})
     nordvpn_config = yaml_config.get("nordvpn", {})
 
-    rounds = args.rounds or settings.get("ping_rounds", 3)
-    timeout = args.timeout or settings.get("timeout_seconds", 10)
-    concurrency = settings.get("concurrent_limit", 16)
+    rounds, timeout, concurrency = validate_settings(
+        args.rounds if args.rounds is not None else settings.get("ping_rounds", 3),
+        args.timeout
+        if args.timeout is not None
+        else settings.get("timeout_seconds", 10),
+        settings.get("concurrent_limit", 16),
+    )
 
     # Live dashboard — skip one-shot flow entirely
     if args.live:

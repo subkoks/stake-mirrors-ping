@@ -25,7 +25,10 @@ class PingResult:
     server_city: str | None = None
     server_lat: float | None = None
     server_lon: float | None = None
+    # Compatibility flag: HTTP response eligible for ranking, never authenticity.
     is_up: bool = False
+    reachability: str = "unknown"
+    application_status: str = "unverified"
     ssl_valid: bool = False
     http_status: int | None = None
     error: str | None = None
@@ -41,12 +44,17 @@ class PingResult:
 
     @property
     def best_latency_ms(self) -> float | None:
-        latencies = [
-            v
-            for v in [self.tcp_latency_ms, self.https_latency_ms, self.api_latency_ms]
-            if v is not None
-        ]
-        return min(latencies) if latencies else None
+        # One comparable measurement; blocked/failed responses cannot win.
+        return self.https_latency_ms if self.is_up else None
+
+    @property
+    def rank_key(self) -> tuple[bool, float, str]:
+        value = self.best_latency_ms
+        return (
+            value is None,
+            value if value is not None else float("inf"),
+            self.mirror.domain,
+        )
 
 
 @dataclass

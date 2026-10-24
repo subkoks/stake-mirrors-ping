@@ -44,13 +44,13 @@ def print_results_table(
     # Sort by best latency (None values last)
     sorted_results = sorted(
         results,
-        key=lambda r: r.best_latency_ms if r.best_latency_ms is not None else 99999,
+        key=lambda r: r.rank_key,
     )
 
     table = Table(title=title, show_lines=True, title_style="bold cyan")
     table.add_column("#", style="dim", width=3)
     table.add_column("Mirror", style="bold")
-    table.add_column("Status", width=6)
+    table.add_column("Status", min_width=12)
     table.add_column("IP", style="dim")
     table.add_column("Location", style="cyan")
     table.add_column("DNS", justify="right")
@@ -61,7 +61,7 @@ def print_results_table(
     table.add_column("Best", justify="right", style="bold")
 
     for i, r in enumerate(sorted_results, 1):
-        status = "[green]✓ UP[/]" if r.is_up else "[red]✗ DOWN[/]"
+        status = r.reachability
         ssl_icon = "🔒" if r.ssl_valid else "⚠️"
 
         table.add_row(
@@ -87,7 +87,7 @@ def print_results_table(
         winner = sorted_results[0]
         console.print(
             Panel(
-                f"[bold green]🏆 FASTEST MIRROR: {winner.mirror.domain}[/]\n"
+                f"[bold green]🏆 LOWEST HTTP LATENCY: {winner.mirror.domain}[/]\n"
                 f"   Best latency: {fmt_ms(winner.best_latency_ms)}\n"
                 f"   Location: {winner.server_location or 'Unknown'}\n"
                 f"   URL: {winner.mirror.url}",
@@ -173,12 +173,14 @@ def export_results(
         filepath = os.path.join(output_dir, f"results_{timestamp}.json")
 
         # Build mirror schemas
-        sorted_results = sorted(results, key=lambda x: x.best_latency_ms or 99999)
+        sorted_results = sorted(results, key=lambda x: x.rank_key)
         mirror_schemas = [
             MirrorResultSchema(
                 domain=r.mirror.domain,
                 url=r.mirror.url,
                 is_up=r.is_up,
+                reachability=r.reachability,
+                application_status=r.application_status,
                 ip_address=r.ip_address,
                 server_location=r.server_location,
                 server_country=r.server_country,
@@ -259,15 +261,13 @@ def export_results(
                     "Error",
                 ]
             )
-            for i, r in enumerate(
-                sorted(results, key=lambda x: x.best_latency_ms or 99999), 1
-            ):
+            for i, r in enumerate(sorted(results, key=lambda x: x.rank_key), 1):
                 writer.writerow(
                     [
                         i,
                         r.mirror.domain,
                         r.mirror.url,
-                        "UP" if r.is_up else "DOWN",
+                        r.reachability,
                         r.ip_address,
                         r.server_location,
                         r.dns_resolve_ms,

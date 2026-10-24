@@ -42,12 +42,14 @@ class TestPingResult:
         r = PingResult(
             mirror=m, tcp_latency_ms=10.0, https_latency_ms=20.0, api_latency_ms=5.0
         )
-        assert r.best_latency_ms == 5.0
+        assert r.best_latency_ms is None
+        r.is_up = True
+        assert r.best_latency_ms == 20.0
 
     def test_best_latency_single(self) -> None:
         m = MirrorConfig(domain="stake.com", url="https://stake.com")
         r = PingResult(mirror=m, tcp_latency_ms=42.0)
-        assert r.best_latency_ms == 42.0
+        assert r.best_latency_ms is None
 
     def test_best_latency_none(self) -> None:
         m = MirrorConfig(domain="stake.com", url="https://stake.com")

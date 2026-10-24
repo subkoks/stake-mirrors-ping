@@ -12,8 +12,6 @@ from .log import setup_logging
 
 def main() -> None:
     """CLI entry point."""
-    load_dotenv()
-
     parser = argparse.ArgumentParser(
         description="Stake Mirrors Ping — Find the fastest mirror + VPN combo",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -74,6 +72,12 @@ Examples:
     )
 
     args = parser.parse_args()
+    if (args.live is not None and args.live <= 0) or (
+        args.watch is not None and args.watch <= 0
+    ):
+        parser.error("Refresh intervals must be positive seconds")
+    if args.api:
+        load_dotenv()
     setup_logging(verbose=getattr(args, "verbose", False))
     asyncio.run(orchestrate(args))
 

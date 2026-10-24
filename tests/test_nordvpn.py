@@ -64,6 +64,7 @@ class TestFindBestVPNForMirror:
             mirror=m,
             is_up=True,
             tcp_latency_ms=30.0,
+            https_latency_ms=40.0,
             server_lat=50.0,
             server_lon=8.0,
         )
@@ -87,6 +88,7 @@ class TestFindBestVPNForMirror:
             mirror=m,
             is_up=True,
             tcp_latency_ms=30.0,
+            https_latency_ms=40.0,
             server_lat=50.0,
             server_lon=8.0,
         )
