@@ -67,7 +67,7 @@ jobs:
         run: npm run test:electron:packaged
       - name: Verify unsigned platform installers (no publishing)
         working-directory: gui
-        run: npm run build -- --publish never
+        run: npm run build -- --publish never ${{ matrix.os == 'macos-latest' && '--x64 --arm64' || '' }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure() && matrix.os == 'macos-latest'
         with:

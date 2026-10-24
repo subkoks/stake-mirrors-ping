@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [2.0.0] - 2026-10-24
 
 - Upgrade Electron 33.4.11 to stable supported 43.8.3 and electron-builder 25.1.8 to 26.18.0; resolve the full npm audit without overrides.
 - Validate IPC sender/payloads, minimize preload exposure, and clean up all Python children on close/quit while allowing macOS window reactivation.

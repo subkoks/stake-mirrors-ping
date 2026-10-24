@@ -1096,7 +1096,7 @@ wheels = [
 
 [[package]]
 name = "stake-mirrors-ping"
-version = "1.0.1"
+version = "2.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },

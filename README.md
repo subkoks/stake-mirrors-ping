@@ -5,13 +5,17 @@
   </picture>
 </h1>
 
-**stake-mirrors-ping** measures Stake mirror latency through a Python CLI and Electron desktop GUI, with NordVPN region recommendations, scan history, and JSON/CSV export.
+**stake-mirrors-ping** is a desktop GUI for measuring Stake mirror latency on Windows, macOS, and Linux, with NordVPN region recommendations, scan history, and JSON/CSV export. A Python CLI is also available.
 
 **[Quick start](#quick-start)** · [Features](#features) · [CLI options](#cli-options) · [Configuration](#config) · [Architecture](#architecture)
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-393632?labelColor=1B1A18)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-393632?labelColor=1B1A18)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/subkoks/stake-mirrors-ping)](https://github.com/subkoks/stake-mirrors-ping/releases)
+
+## Desktop downloads
+
+Download the latest **[desktop release](https://github.com/subkoks/stake-mirrors-ping/releases/latest)**. Choose Windows x64 (installer or portable EXE), macOS Apple Silicon or Intel (DMG/ZIP), or Linux x64 (AppImage/DEB/RPM). Desktop builds require a separate Python 3.12+ environment with the application dependencies; see [desktop setup](#desktop-gui). Binaries are unsigned and macOS builds are not notarized.
 
 ## Quick start
 
