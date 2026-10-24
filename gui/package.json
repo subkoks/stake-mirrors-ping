@@ -16,7 +16,10 @@
     "test:electron:packaged": "node e2e/gui.cjs --packaged"
   },
   "keywords": [],
-  "author": "blackterminal",
+  "author": {
+    "name": "blackterminal",
+    "email": "subkoks@gmail.com"
+  },
   "license": "MIT",
   "devDependencies": {
     "electron": "43.8.3",
@@ -84,5 +87,10 @@
   },
   "engines": {
     "node": ">=22.12.0 <23"
+  },
+  "homepage": "https://github.com/subkoks/stake-mirrors-ping",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/subkoks/stake-mirrors-ping"
   }
 }
