@@ -171,5 +171,9 @@ async function scan(mode) {
  } catch (error) {
   if (page) await page.screenshot({ path: path.join(base, 'failure.png') }).catch(() => {});
   console.error(error); process.exitCode = 1;
- } finally { clearTimeout(deadline); if (app) await app.close().catch(() => {}); }
+ } finally {
+  if (app) await app.close().catch(() => {});
+  clearTimeout(deadline);
+  if (process.exitCode) process.exit(process.exitCode);
+ }
 })();
