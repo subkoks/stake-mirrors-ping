@@ -87,8 +87,10 @@ jobs:
           set -euo pipefail
           for baseline in 22.04 24.04; do
             docker build --build-arg BASE=ubuntu:$baseline -t stake-clean:$baseline -f packaging/clean-linux.Dockerfile .
-            docker run --rm --cap-add=SYS_ADMIN --security-opt seccomp=unconfined -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE:ro" -v "$(command -v node):/node:ro" -e STAKE_PACKAGE_DIR="$GITHUB_WORKSPACE/gui/dist" -e STAKE_E2E_SCRIPT="$GITHUB_WORKSPACE/gui/e2e/desktop.cjs" stake-clean:$baseline bash -c '
+            timeout 8m docker run --rm --init --shm-size=1g --cap-add=SYS_ADMIN --security-opt seccomp=unconfined -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE:ro" -v "$(command -v node):/node:ro" -e STAKE_PACKAGE_DIR="$GITHUB_WORKSPACE/gui/dist" -e STAKE_E2E_SCRIPT="$GITHUB_WORKSPACE/gui/e2e/desktop.cjs" stake-clean:$baseline bash -c '
               set -euo pipefail
+              echo "Clean container started; installing the application"
+              /node --version
               apt-get update
               apt-get install -y --no-install-recommends "$STAKE_PACKAGE_DIR/"*.deb
               for tool in python3 python git node; do

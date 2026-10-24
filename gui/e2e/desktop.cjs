@@ -12,12 +12,18 @@ const base = fs.mkdtempSync(path.join(process.env.STAKE_E2E_OUTPUT || os.tmpdir(
 const data = path.join(base, 'Saved data Å'); fs.mkdirSync(data);
 fs.writeFileSync(path.join(data, 'python-path.txt'), path.join(base, 'nonexistent-python'));
 let app; let page; let passed = 0; const errors = [];
+const deadline = setTimeout(() => {
+  console.error('Packaged acceptance exceeded its five-minute deadline');
+  if (app) app.process().kill('SIGKILL');
+  process.exit(1);
+}, 300000);
 const env = { ...process.env, STAKE_PYTHON: path.join(base, 'nonexistent-python'), PYTHONPATH: base };
 for (const key of ['VIRTUAL_ENV', 'CONDA_PREFIX', 'STAKE_SESSION_TOKEN', 'STAKE_TRUSTED_DOMAINS']) delete env[key];
 function gone(pid) { try { process.kill(pid, 0); return false; } catch { return true; } }
 async function check(name, action) { await action(); console.log('PASS ' + name); passed++; }
 async function launch(ready = true) {
   const started = Date.now();
+  console.log('LAUNCH packaged app; fixture=' + fixture + '; sandbox=' + (process.env.STAKE_E2E_SANDBOX === '1'));
   app = await electron.launch({ executablePath: executable, args: [`--user-data-dir=${data}`, ...(process.platform === 'linux' && process.env.STAKE_E2E_SANDBOX !== '1' ? ['--no-sandbox'] : [])], env, cwd: base, timeout: 45000 });
   page = await app.firstWindow(); page.on('pageerror', error => errors.push(error.message));
   if (ready) await page.locator('#run-scan-btn:enabled').waitFor({ timeout: 30000 });
@@ -165,5 +171,5 @@ async function scan(mode) {
  } catch (error) {
   if (page) await page.screenshot({ path: path.join(base, 'failure.png') }).catch(() => {});
   console.error(error); process.exitCode = 1;
- } finally { if (app) await app.close().catch(() => {}); }
+ } finally { clearTimeout(deadline); if (app) await app.close().catch(() => {}); }
 })();
