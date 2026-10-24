@@ -128,7 +128,15 @@ def main() -> None:
             b"\xca\xfe\xba\xbe",
         ):
             info = subprocess.check_output(["otool", "-l", str(binary)], text=True)
-            for value in re.findall(r"(?:minos|\bversion) (\d+\.\d+(?:\.\d+)?)", info):
+            minimum_blocks = [
+                block
+                for block in re.split(r"Load command \d+", info)
+                if "cmd LC_BUILD_VERSION" in block
+                or "cmd LC_VERSION_MIN_MACOSX" in block
+            ]
+            for value in re.findall(
+                r"(?:minos|\bversion) (\d+\.\d+(?:\.\d+)?)", "\n".join(minimum_blocks)
+            ):
                 requirements.add(value)
                 if tuple(map(int, value.split(".")[:2])) > (13, 0):
                     raise SystemExit(
