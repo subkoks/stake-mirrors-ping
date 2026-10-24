@@ -91,8 +91,10 @@ jobs:
               set -euo pipefail
               apt-get update
               apt-get install -y --no-install-recommends "$STAKE_PACKAGE_DIR/"*.deb
-              ! command -v python3 && ! command -v python && ! command -v git && ! command -v node
-              useradd -m -u 1000 desktoptest
+              for tool in python3 python git node; do
+                if command -v "$tool"; then echo "Unexpected system runtime: $tool" >&2; exit 1; fi
+              done
+              useradd -m desktoptest
               runuser -u desktoptest -- env STAKE_E2E_SANDBOX=1 STAKE_E2E_OUTPUT=/tmp STAKE_DESKTOP_EXECUTABLE="/opt/Stake Mirrors Ping/stake-mirrors-ping-gui" xvfb-run -a /node "$STAKE_E2E_SCRIPT"
             '
           done

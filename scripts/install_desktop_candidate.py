@@ -66,6 +66,9 @@ def main() -> None:
                 timeout=180,
             )
         executable = destination / "Stake Mirrors Ping.exe"
+        if not args.fixture and os.environ.get("GITHUB_ENV"):
+            with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env:
+                env.write(f"STAKE_DESKTOP_INSTALLER={installer}\n")
     else:
         if args.fixture:
             shutil.copytree(

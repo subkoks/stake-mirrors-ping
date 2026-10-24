@@ -17,6 +17,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def macos_minimums(info: str) -> set[str]:
+    """Read deployment fields only; dylib and linker versions are unrelated."""
+    values = set()
+    for block in re.split(r"Load command \d+", info):
+        if "cmd LC_BUILD_VERSION" in block:
+            values.update(re.findall(r"\bminos\s+(\d+\.\d+(?:\.\d+)?)", block))
+        elif "cmd LC_VERSION_MIN_MACOSX" in block:
+            values.update(re.findall(r"(?m)^\s*version\s+(\d+\.\d+(?:\.\d+)?)", block))
+    return values
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--fixture", action="store_true")
@@ -128,15 +139,7 @@ def main() -> None:
             b"\xca\xfe\xba\xbe",
         ):
             info = subprocess.check_output(["otool", "-l", str(binary)], text=True)
-            minimum_blocks = [
-                block
-                for block in re.split(r"Load command \d+", info)
-                if "cmd LC_BUILD_VERSION" in block
-                or "cmd LC_VERSION_MIN_MACOSX" in block
-            ]
-            for value in re.findall(
-                r"(?:minos|\bversion) (\d+\.\d+(?:\.\d+)?)", "\n".join(minimum_blocks)
-            ):
+            for value in macos_minimums(info):
                 requirements.add(value)
                 if tuple(map(int, value.split(".")[:2])) > (13, 0):
                     raise SystemExit(
@@ -156,6 +159,7 @@ def main() -> None:
         if os.environ.get("GITHUB_ACTIONS")
         else "local Python build (see interpreter version and embedded binary hashes)",
         "native_abi_versions": sorted(requirements),
+        "runtime_health": response,
         "fixture": args.fixture,
         "lock_sha256": hashlib.sha256((ROOT / "uv.lock").read_bytes()).hexdigest(),
         "build_environment": sorted(packages, key=lambda p: p["name"]),

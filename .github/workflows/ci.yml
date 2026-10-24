@@ -62,7 +62,7 @@ jobs:
 
     - name: Audit locked application dependencies
       run: |
-        uv export --frozen --no-dev --no-emit-project --format requirements-txt --output-file audit-requirements.txt
+        uv export --frozen --no-dev --group desktop --no-emit-project --format requirements-txt --output-file audit-requirements.txt
         python -m pip_audit -r audit-requirements.txt
         bandit -r src/
 

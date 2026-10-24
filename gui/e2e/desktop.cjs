@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
+const { execFileSync } = require('node:child_process');
 const fixture = process.argv.includes('--fixture');
 const executable = process.env.STAKE_DESKTOP_EXECUTABLE;
 if (!executable || !path.isAbsolute(executable)) throw new Error('Set STAKE_DESKTOP_EXECUTABLE to the installed application');
@@ -50,7 +51,12 @@ async function scan(mode) {
     await page.locator('[data-panel="settings"]').click();
     await page.locator('#timeout').fill('17'); await page.locator('#save-settings-btn').click();
     await page.locator('#save-settings-btn').filter({ hasText: 'Saved' }).waitFor();
-    await app.close(); await launch();
+    await app.close();
+    if (!fixture && process.platform === 'win32' && process.env.STAKE_DESKTOP_INSTALLER) {
+      execFileSync(process.env.STAKE_DESKTOP_INSTALLER, ['/S', '/D='+path.dirname(executable)], { timeout:180000, windowsHide:true });
+      console.log('PASS Windows reinstall over existing app preserves separate user data');
+    }
+    await launch();
     assert.equal(await page.locator('#timeout').inputValue(), '17');
     assert.ok(fs.existsSync(path.join(data, 'python-path.txt')));
   });
@@ -106,6 +112,11 @@ async function scan(mode) {
     await check('history is saved and available from the GUI', async () => {
       await page.locator('[data-panel="history"]').click(); await page.locator('#load-history-btn').click();
       await page.locator('#history-body tr').filter({ hasText: 'stake' }).first().waitFor();
+      const count = await page.locator('#history-body tr').count();
+      await app.close(); await launch();
+      await page.locator('[data-panel="history"]').click(); await page.locator('#load-history-btn').click();
+      await page.locator('#history-body tr').filter({ hasText: 'stake' }).first().waitFor();
+      assert.equal(await page.locator('#history-body tr').count(), count);
       await page.locator('[data-panel="mirrors"]').click();
     });
     await check('cancel and restart cannot mix results; child process exits', async () => {
