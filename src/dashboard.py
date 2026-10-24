@@ -26,7 +26,7 @@ def _build_header(cycle: int, interval: int, up: int, total: int) -> Panel:
         f"[dim]{now}[/]  │  "
         f"Cycle [bold]{cycle}[/]  │  "
         f"Refresh: {interval}s  │  "
-        f"[green]{up}[/]/{total} mirrors up  │  "
+        f"[green]{up}[/]/{total} HTTP responding  │  "
         f"[dim]Ctrl+C to stop[/]",
         border_style="cyan",
         padding=(0, 1),
@@ -37,13 +37,13 @@ def _build_mirror_table(results: list[PingResult], show_api: bool = False) -> Ta
     """Build the mirror results table."""
     sorted_results = sorted(
         results,
-        key=lambda r: r.best_latency_ms if r.best_latency_ms is not None else 99999,
+        key=lambda r: r.rank_key,
     )
 
     table = Table(show_lines=True, expand=True, title_style="bold cyan")
     table.add_column("#", style="dim", width=3)
     table.add_column("Mirror", style="bold", min_width=14)
-    table.add_column("Status", width=6)
+    table.add_column("Status", min_width=12)
     table.add_column("IP", style="dim", min_width=12)
     table.add_column("Location", style="cyan", min_width=10)
     table.add_column("TCP", justify="right", min_width=7)
@@ -54,7 +54,7 @@ def _build_mirror_table(results: list[PingResult], show_api: bool = False) -> Ta
     table.add_column("Trend", justify="center", width=5)
 
     for i, r in enumerate(sorted_results, 1):
-        status = "[green]✓ UP[/]" if r.is_up else "[red]✗ DN[/]"
+        status = r.reachability
         ssl_icon = "🔒" if r.ssl_valid else "⚠️"
 
         # Simple trend indicator based on TCP vs HTTPS spread
@@ -97,7 +97,7 @@ def _build_footer(results: list[PingResult]) -> Panel:
     if not sorted_up:
         return Panel("[red]No mirrors responding[/]", border_style="red")
 
-    sorted_up.sort(key=lambda r: r.best_latency_ms or 999)
+    sorted_up.sort(key=lambda r: r.rank_key)
     best = sorted_up[0]
     second = sorted_up[1] if len(sorted_up) > 1 else None
 

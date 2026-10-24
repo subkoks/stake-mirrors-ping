@@ -2,130 +2,180 @@ import asyncio
 import socket
 import ssl
 import time
+from urllib.parse import urlsplit
 
 import aiohttp
 import certifi
 
 from .log import logger
+from .mirror_validation import (
+    PublicResolver,
+    normalize_destination,
+    public_ip,
+    validate_settings,
+)
 from .models import MirrorConfig, PingResult
 
 
 async def tcp_ping(host: str, port: int = 443, timeout: float = 10.0) -> float | None:
-    """Measure TCP connect latency in ms."""
+    """Connect only to an already validated public numeric address."""
+    writer = None
     try:
+        public_ip(host)
         start = time.perf_counter()
-        _, writer = await asyncio.wait_for(
-            asyncio.open_connection(host, port),
-            timeout=timeout,
-        )
-        elapsed = (time.perf_counter() - start) * 1000
-        writer.close()
-        await writer.wait_closed()
-        return round(elapsed, 2)
-    except Exception as e:
-        logger.debug("tcp_ping failed for %s: %s", host, e)
+        _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout)
+        return round((time.perf_counter() - start) * 1000, 2)
+    except (OSError, TimeoutError, ValueError) as exc:
+        logger.debug("TCP probe failed: %s", type(exc).__name__)
         return None
+    finally:
+        if writer is not None:
+            writer.close()
+            try:
+                await asyncio.wait_for(writer.wait_closed(), timeout)
+            except (OSError, TimeoutError):
+                pass
 
 
 async def https_ping(
-    url: str, timeout: float = 10.0, session: aiohttp.ClientSession | None = None
+    url: str,
+    timeout: float = 10.0,
+    session: aiohttp.ClientSession | None = None,
+    errors: list[str] | None = None,
 ) -> tuple[float | None, int | None, bool]:
-    """Measure HTTPS HEAD request latency. Returns (latency_ms, status_code, ssl_valid)."""
-    ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+    """Measure one origin HEAD, without following untrusted redirects."""
     own_session = session is None
+    parsed = urlsplit(url)
+    normalize_destination(parsed.hostname or "", url)
     if own_session:
-        session = aiohttp.ClientSession()
+        session = aiohttp.ClientSession(
+            connector=aiohttp.TCPConnector(
+                resolver=PublicResolver(timeout), family=socket.AF_UNSPEC
+            )
+        )
     try:
         start = time.perf_counter()
         async with session.head(  # type: ignore[union-attr]
             url,
             timeout=aiohttp.ClientTimeout(total=timeout),
-            ssl=ssl_ctx,
-            allow_redirects=True,
+            ssl=ssl.create_default_context(cafile=certifi.where()),
+            allow_redirects=False,
         ) as resp:
-            elapsed = (time.perf_counter() - start) * 1000
-            return round(elapsed, 2), resp.status, True
-    except ssl.SSLError:
-        # Certificate validation failed — explicitly mark as invalid.
+            return (
+                round((time.perf_counter() - start) * 1000, 2),
+                resp.status,
+                parsed.scheme == "https",
+            )
+    except (ssl.SSLError, aiohttp.ClientSSLError):
+        if errors is not None:
+            errors.append("tls_error")
         return None, None, False
-    except Exception as e:
-        logger.debug("https_ping failed for %s: %s", url, e)
-        # Any other failure (timeout, connection error, DNS) means we never
-        # validated TLS, so ssl_valid must stay False rather than default True.
+    except TimeoutError:
+        if errors is not None:
+            errors.append("http_timeout")
+        return None, None, False
+    except ValueError:
+        if errors is not None:
+            errors.append("destination_rejected")
+        return None, None, False
+    except (aiohttp.ClientError, OSError):
+        if errors is not None:
+            errors.append("http_connection_error")
         return None, None, False
     finally:
         if own_session:
             await session.close()  # type: ignore[union-attr]
 
 
-async def dns_resolve(domain: str) -> tuple[str | None, float | None]:
-    """Resolve domain to IP and measure DNS lookup time."""
-    try:
-        start = time.perf_counter()
-        loop = asyncio.get_running_loop()
-        result = await loop.getaddrinfo(domain, 443, family=socket.AF_INET)
-        elapsed = (time.perf_counter() - start) * 1000
-        ip = result[0][4][0] if result else None
-        return str(ip) if ip else None, round(elapsed, 2)
-    except Exception as e:
-        logger.debug("dns_resolve failed for %s: %s", domain, e)
-        return None, None
+async def dns_resolve(
+    domain: str, timeout: float = 10.0, port: int = 443
+) -> tuple[str | None, float | None]:
+    """Bound DNS time and reject the entire answer if any address is non-public."""
+    start = time.perf_counter()
+    answers = await PublicResolver(timeout).resolve(domain, port, socket.AF_UNSPEC)
+    return answers[0]["host"], round((time.perf_counter() - start) * 1000, 2)
+
+
+def classify_http(status: int | None) -> str:
+    if status is None:
+        return "http_unavailable"
+    if status in (401, 403):
+        return "blocked_or_challenged"
+    if status == 429:
+        return "rate_limited"
+    if 300 <= status < 400:
+        return "redirect_unverified"
+    if 200 <= status < 300:
+        return "http_responding"
+    return "http_error"
 
 
 async def ping_mirror(
-    mirror: MirrorConfig,
-    rounds: int = 3,
-    timeout: float = 10.0,
+    mirror: MirrorConfig, rounds: int = 3, timeout: float = 10.0
 ) -> PingResult:
-    """Run full ping suite on a single mirror."""
     result = PingResult(mirror=mirror)
-
-    # DNS resolve
-    ip, dns_ms = await dns_resolve(mirror.domain)
-    result.ip_address = ip
-    result.dns_resolve_ms = dns_ms
-
-    if not ip:
-        result.error = "DNS resolution failed"
+    domain, url = normalize_destination(mirror.domain, mirror.url)
+    parsed = urlsplit(url)
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        result.ip_address, result.dns_resolve_ms = await dns_resolve(
+            domain, timeout, port
+        )
+    except TimeoutError:
+        result.reachability = "dns_timeout"
+        result.error = "Local DNS lookup timed out; remote status unknown"
+        return result
+    except ValueError:
+        result.reachability = "destination_rejected"
+        result.error = "Destination resolved to a non-public address"
+        return result
+    except OSError:
+        result.reachability = "dns_error"
+        result.error = "Local DNS lookup failed; remote status unknown"
         return result
 
-    # TCP ping (average over rounds)
     tcp_times = []
     for _ in range(rounds):
-        t = await tcp_ping(ip, timeout=timeout)
-        if t is not None:
-            tcp_times.append(t)
-        await asyncio.sleep(0.1)
+        value = await tcp_ping(result.ip_address, port, timeout)  # type: ignore[arg-type]
+        if value is not None:
+            tcp_times.append(value)
     result.tcp_latency_ms = (
         round(sum(tcp_times) / len(tcp_times), 2) if tcp_times else None
     )
 
-    # HTTPS ping (average over rounds)
-    https_times = []
-    statuses = []
-    ssl_valid = True
-    async with aiohttp.ClientSession() as session:
+    times, statuses, valid = [], [], []
+    errors: list[str] = []
+    async with aiohttp.ClientSession(
+        connector=aiohttp.TCPConnector(
+            resolver=PublicResolver(timeout), family=socket.AF_UNSPEC
+        )
+    ) as session:
         for _ in range(rounds):
             latency, status, ssl_ok = await https_ping(
-                mirror.url, timeout=timeout, session=session
+                url, timeout, session, errors=errors
             )
+            valid.append(ssl_ok)
             if latency is not None:
-                https_times.append(latency)
-            if status is not None:
-                statuses.append(status)
-            if not ssl_ok:
-                ssl_valid = False
-            await asyncio.sleep(0.1)
-
-    result.https_latency_ms = (
-        round(sum(https_times) / len(https_times), 2) if https_times else None
+                times.append(latency)
+            statuses.append(status)
+    result.https_latency_ms = round(sum(times) / len(times), 2) if times else None
+    result.ssl_valid = all(valid)
+    # A failed/blocked round must not be hidden behind a successful first round.
+    result.http_status = next(
+        (s for s in statuses if s is None or not 200 <= s < 300), statuses[0]
     )
-    result.ssl_valid = ssl_valid
-    result.http_status = statuses[0] if statuses else None
-    result.is_up = bool(
-        https_times and statuses and statuses[0] in (200, 301, 302, 403)
+    result.reachability = (
+        errors[0]
+        if result.http_status is None and errors
+        else classify_http(result.http_status)
     )
-
+    if result.http_status is None:
+        result.error = (
+            "Local HTTP/TLS request failed or timed out; remote status unknown"
+        )
+    result.is_up = all(s is not None and 200 <= s < 300 for s in statuses) and bool(
+        times
+    )
     return result
 
 
@@ -135,12 +185,18 @@ async def ping_all_mirrors(
     timeout: float = 10.0,
     concurrency: int = 16,
 ) -> list[PingResult]:
-    """Ping all mirrors concurrently."""
+    rounds, timeout, concurrency = validate_settings(rounds, timeout, concurrency)
     sem = asyncio.Semaphore(concurrency)
 
-    async def _limited(m: MirrorConfig) -> PingResult:
+    async def limited(mirror: MirrorConfig) -> PingResult:
         async with sem:
-            return await ping_mirror(m, rounds=rounds, timeout=timeout)
+            return await ping_mirror(mirror, rounds, timeout)
 
-    tasks = [_limited(m) for m in mirrors]
-    return await asyncio.gather(*tasks)
+    tasks = [asyncio.create_task(limited(m)) for m in mirrors]
+    try:
+        return await asyncio.gather(*tasks)
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)

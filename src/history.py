@@ -6,7 +6,10 @@ from datetime import datetime
 
 from .models import PingResult
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "history.db")
+DB_PATH = os.path.join(
+    os.environ.get("STAKE_DATA_DIR", os.path.dirname(os.path.dirname(__file__))),
+    "history.db",
+)
 
 
 class HistoryDB:
@@ -27,7 +30,8 @@ class HistoryDB:
 
     def _ensure_tables(self) -> None:
         """Create tables and indexes if they don't exist."""
-        assert self.conn is not None
+        if self.conn is None:
+            raise RuntimeError("History database is not open")
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS ping_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,11 +57,24 @@ class HistoryDB:
             CREATE INDEX IF NOT EXISTS idx_ping_domain_ts
             ON ping_history (domain, timestamp)
         """)
+        columns = {
+            row[1] for row in self.conn.execute("PRAGMA table_info(ping_history)")
+        }
+        for column, default in (
+            ("reachability", "legacy"),
+            ("application_status", "unverified"),
+        ):
+            if column not in columns:
+                # Identifiers/defaults are fixed application constants.
+                self.conn.execute(
+                    f"ALTER TABLE ping_history ADD COLUMN {column} TEXT NOT NULL DEFAULT '{default}'"
+                )
         self.conn.commit()
 
     def save_results(self, results: list[PingResult]) -> int:
         """Save ping results to history DB. Returns number of rows inserted."""
-        assert self.conn is not None
+        if self.conn is None:
+            raise RuntimeError("History database is not open")
         ts = datetime.now().isoformat()
         rows = []
         for r in results:
@@ -79,6 +96,8 @@ class HistoryDB:
                     int(r.ssl_valid),
                     r.http_status,
                     r.error,
+                    r.reachability,
+                    r.application_status,
                 )
             )
         self.conn.executemany(
@@ -86,8 +105,8 @@ class HistoryDB:
             INSERT INTO ping_history
             (timestamp, domain, url, is_up, ip_address, server_location,
              dns_ms, tcp_ms, https_ms, api_ms, ws_ms, bet_ms, best_ms,
-             ssl_valid, http_status, error)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ssl_valid, http_status, error, reachability, application_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             rows,
         )
@@ -96,7 +115,8 @@ class HistoryDB:
 
     def get_domain_history(self, domain: str, limit: int = 100) -> list[dict]:
         """Get recent history for a specific mirror domain."""
-        assert self.conn is not None
+        if self.conn is None:
+            raise RuntimeError("History database is not open")
         self.conn.row_factory = sqlite3.Row
         rows = self.conn.execute(
             """
@@ -111,7 +131,8 @@ class HistoryDB:
 
     def get_recent_scans(self, limit: int = 10) -> list[dict]:
         """Get recent scan timestamps with mirror counts."""
-        assert self.conn is not None
+        if self.conn is None:
+            raise RuntimeError("History database is not open")
         self.conn.row_factory = sqlite3.Row
         rows = self.conn.execute(
             """
@@ -130,7 +151,8 @@ class HistoryDB:
 
     def get_mirror_history(self, domain: str, days: int = 7) -> list[dict]:
         """Get history for a mirror over the last N days."""
-        assert self.conn is not None
+        if self.conn is None:
+            raise RuntimeError("History database is not open")
         self.conn.row_factory = sqlite3.Row
         # Validate `days` is a non-negative int before building the modifier.
         # SQLite's datetime() interval must be a literal, not a bound param.
@@ -150,7 +172,8 @@ class HistoryDB:
 
     def get_latest_scan(self) -> list[dict]:
         """Get the most recent scan results (all mirrors from the last timestamp)."""
-        assert self.conn is not None
+        if self.conn is None:
+            raise RuntimeError("History database is not open")
         self.conn.row_factory = sqlite3.Row
         latest_ts = self.conn.execute(
             "SELECT MAX(timestamp) as ts FROM ping_history"
@@ -161,7 +184,7 @@ class HistoryDB:
             """
             SELECT * FROM ping_history
             WHERE timestamp = ?
-            ORDER BY best_ms ASC
+            ORDER BY (best_ms IS NULL), best_ms ASC
         """,
             (latest_ts,),
         ).fetchall()
@@ -171,7 +194,8 @@ class HistoryDB:
         self, domain: str | None = None, hours: int = 24
     ) -> dict[str, dict]:
         """Get uptime percentage and average latency stats."""
-        assert self.conn is not None
+        if self.conn is None:
+            raise RuntimeError("History database is not open")
         self.conn.row_factory = sqlite3.Row
         query = """
             SELECT
@@ -230,7 +254,8 @@ class HistoryDB:
 
     def get_scan_count(self) -> int:
         """Get total number of distinct scans in history."""
-        assert self.conn is not None
+        if self.conn is None:
+            raise RuntimeError("History database is not open")
         count: int = self.conn.execute(
             "SELECT COUNT(DISTINCT timestamp) as cnt FROM ping_history"
         ).fetchone()[0]

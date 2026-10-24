@@ -17,7 +17,7 @@ Thank you for your interest in contributing! 🎉
    ```
 4. Install dependencies:
    ```bash
-   pip install -r requirements.txt
+   uv sync --locked
    ```
 
 ## Development Workflow
@@ -29,7 +29,10 @@ Thank you for your interest in contributing! 🎉
 2. Make your changes
 3. Test your changes:
    ```bash
-   python -m src.main
+   uv run --frozen pytest tests/ -v
+   uv run --frozen ruff check src/ tests/
+   uv run --frozen ruff format --check src/ tests/
+   uv run --frozen mypy src/
    ```
 4. Commit with clear messages:
    ```bash
@@ -55,8 +58,7 @@ To add a new Stake mirror, edit [config.yaml](config.yaml):
 ```yaml
 mirrors:
   - domain: newmirror.com
-    https: true
-    port: 443
+    url: https://newmirror.com
 ```
 
 ## Pull Request Guidelines
@@ -75,3 +77,5 @@ mirrors:
 ## Questions?
 
 Open an issue or start a discussion!
+
+Use [the refresh workflow](docs/mirrors/refresh.md) for source updates. Tests must mock external availability; do not use authenticated API or betting benchmarks. GUI checks: `cd gui`, `npm ci`, `npm test`, `npm run build:check -- --publish never`.

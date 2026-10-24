@@ -6,5 +6,4 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getConfig: () => ipcRenderer.invoke('get-config'),
   updateConfig: (config) => ipcRenderer.invoke('update-config', config),
   stopScan: () => ipcRenderer.invoke('stop-scan'),
-  onScanProgress: (callback) => ipcRenderer.on('scan-progress', callback),
 });

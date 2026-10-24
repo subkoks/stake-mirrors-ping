@@ -93,7 +93,7 @@ def test_handle_run_scan_serializes_scan_result(monkeypatch, capsys) -> None:
     assert payload["success"] is True
     assert payload["scan_id"] == "scan-1"
     assert payload["mirrors"][0]["domain"] == "x.com"
-    assert payload["mirrors"][0]["best_ms"] == 10.0
+    assert payload["mirrors"][0]["best_ms"] == 20.0
 
 
 # --------------------------------------------------------------------------- #

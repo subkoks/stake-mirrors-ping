@@ -33,6 +33,216 @@ mirrors:
     url: https://stake.krd
   - domain: stake1039.com
     url: https://stake1039.com
+  - domain: stake.com
+    url: https://stake.com
+  - domain: stake1020.com
+    url: https://stake1020.com
+  - domain: stake1021.com
+    url: https://stake1021.com
+  - domain: stake1034.com
+    url: https://stake1034.com
+  - domain: stake1035.com
+    url: https://stake1035.com
+  - domain: stake1036.com
+    url: https://stake1036.com
+  - domain: stake1037.com
+    url: https://stake1037.com
+  - domain: stake1038.com
+    url: https://stake1038.com
+  - domain: stake1043.com
+    url: https://stake1043.com
+  - domain: stake1048.com
+    url: https://stake1048.com
+  - domain: stake1052.com
+    url: https://stake1052.com
+  - domain: stake1057.com
+    url: https://stake1057.com
+  - domain: stake1061.com
+    url: https://stake1061.com
+  - domain: stake1066.com
+    url: https://stake1066.com
+  - domain: stake1067.com
+    url: https://stake1067.com
+  - domain: stake1068.com
+    url: https://stake1068.com
+  - domain: stake1069.com
+    url: https://stake1069.com
+  - domain: stake1070.com
+    url: https://stake1070.com
+  - domain: stake1071.com
+    url: https://stake1071.com
+  - domain: stake1072.com
+    url: https://stake1072.com
+  - domain: stake1073.com
+    url: https://stake1073.com
+  - domain: stake1074.com
+    url: https://stake1074.com
+  - domain: stake1077.com
+    url: https://stake1077.com
+  - domain: stake1079.com
+    url: https://stake1079.com
+  - domain: stake1080.com
+    url: https://stake1080.com
+  - domain: stake1083.com
+    url: https://stake1083.com
+  - domain: stake1088.com
+    url: https://stake1088.com
+  - domain: stake1090.com
+    url: https://stake1090.com
+  - domain: stake1094.com
+    url: https://stake1094.com
+  - domain: stake3000.com
+    url: https://stake3000.com
+  - domain: stake3001.com
+    url: https://stake3001.com
+  - domain: stake3002.com
+    url: https://stake3002.com
+  - domain: stake3003.com
+    url: https://stake3003.com
+  - domain: stake3004.com
+    url: https://stake3004.com
+  - domain: stake3005.com
+    url: https://stake3005.com
+  - domain: stake3007.com
+    url: https://stake3007.com
+  - domain: stake3009.com
+    url: https://stake3009.com
+  - domain: stake3011.com
+    url: https://stake3011.com
+  - domain: stake3012.com
+    url: https://stake3012.com
+  - domain: stake3013.com
+    url: https://stake3013.com
+  - domain: stake3014.com
+    url: https://stake3014.com
+  - domain: stake3015.com
+    url: https://stake3015.com
+  - domain: stake3016.com
+    url: https://stake3016.com
+  - domain: stake3017.com
+    url: https://stake3017.com
+  - domain: stake3018.com
+    url: https://stake3018.com
+  - domain: stake3019.com
+    url: https://stake3019.com
+  - domain: stake3020.com
+    url: https://stake3020.com
+  - domain: stake3026.com
+    url: https://stake3026.com
+  - domain: stake3027.com
+    url: https://stake3027.com
+  - domain: stake3028.com
+    url: https://stake3028.com
+  - domain: stake3029.com
+    url: https://stake3029.com
+  - domain: stake3030.com
+    url: https://stake3030.com
+  - domain: stake3033.com
+    url: https://stake3033.com
+  - domain: stake3035.com
+    url: https://stake3035.com
+  - domain: stake3039.com
+    url: https://stake3039.com
+  - domain: stake3040.com
+    url: https://stake3040.com
+  - domain: stake3041.com
+    url: https://stake3041.com
+  - domain: stake3043.com
+    url: https://stake3043.com
+  - domain: stake3045.com
+    url: https://stake3045.com
+  - domain: stake3046.com
+    url: https://stake3046.com
+  - domain: stake3047.com
+    url: https://stake3047.com
+  - domain: stake3048.com
+    url: https://stake3048.com
+  - domain: stake3050.com
+    url: https://stake3050.com
+  - domain: stake3051.com
+    url: https://stake3051.com
+  - domain: stake3053.com
+    url: https://stake3053.com
+  - domain: stake3056.com
+    url: https://stake3056.com
+  - domain: stake3058.com
+    url: https://stake3058.com
+  - domain: stake3061.com
+    url: https://stake3061.com
+  - domain: stake3062.com
+    url: https://stake3062.com
+  - domain: stake3064.com
+    url: https://stake3064.com
+  - domain: stake3065.com
+    url: https://stake3065.com
+  - domain: stake3067.com
+    url: https://stake3067.com
+  - domain: stake3069.com
+    url: https://stake3069.com
+  - domain: stake3070.com
+    url: https://stake3070.com
+  - domain: stake3072.com
+    url: https://stake3072.com
+  - domain: stake3075.com
+    url: https://stake3075.com
+  - domain: stake3077.com
+    url: https://stake3077.com
+  - domain: stake3079.com
+    url: https://stake3079.com
+  - domain: stake3080.com
+    url: https://stake3080.com
+  - domain: stake3082.com
+    url: https://stake3082.com
+  - domain: stake3083.com
+    url: https://stake3083.com
+  - domain: stake3084.com
+    url: https://stake3084.com
+  - domain: stake3085.com
+    url: https://stake3085.com
+  - domain: stake3086.com
+    url: https://stake3086.com
+  - domain: stake3087.com
+    url: https://stake3087.com
+  - domain: stake3088.com
+    url: https://stake3088.com
+  - domain: stake3090.com
+    url: https://stake3090.com
+  - domain: stake3094.com
+    url: https://stake3094.com
+  - domain: stake3098.com
+    url: https://stake3098.com
+  - domain: stake3099.com
+    url: https://stake3099.com
+  - domain: stake3102.com
+    url: https://stake3102.com
+  - domain: stake3103.com
+    url: https://stake3103.com
+  - domain: stake3104.com
+    url: https://stake3104.com
+  - domain: stake3105.com
+    url: https://stake3105.com
+  - domain: stake3106.com
+    url: https://stake3106.com
+  - domain: stake3107.com
+    url: https://stake3107.com
+  - domain: stake3108.com
+    url: https://stake3108.com
+  - domain: stake3109.com
+    url: https://stake3109.com
+  - domain: stake3112.com
+    url: https://stake3112.com
+  - domain: stake3114.com
+    url: https://stake3114.com
+  - domain: stake3116.com
+    url: https://stake3116.com
+  - domain: stake3119.com
+    url: https://stake3119.com
+  - domain: stake3199.com
+    url: https://stake3199.com
+  - domain: stakeru8.com
+    url: https://stakeru8.com
+  - domain: stkmirror.com
+    url: https://stkmirror.com
 
 settings:
   ping_rounds: 3

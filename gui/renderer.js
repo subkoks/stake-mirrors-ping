@@ -1,6 +1,7 @@
 // Renderer process for Stake Mirrors Ping GUI
 
 let isScanning = false;
+let scanGeneration = 0;
 
 // Tab switching
 document.querySelectorAll('.tab').forEach((tab) => {
@@ -13,13 +14,13 @@ document.querySelectorAll('.tab').forEach((tab) => {
 });
 
 // Error display
-function showError(message) {
+function showError(message, persistent = false) {
   const container = document.getElementById('error-container');
   const div = document.createElement('div');
   div.className = 'error';
   div.textContent = message;
   container.replaceChildren(div);
-  setTimeout(() => container.replaceChildren(), 5000);
+  if (!persistent) setTimeout(() => { if (div.isConnected) div.remove(); }, 5000);
 }
 
 // ----------------------------------------------------------------- helpers
@@ -64,8 +65,8 @@ function latCell(ms) {
   return wrap;
 }
 
-function statusPill(isUp) {
-  const pill = el('span', `pill ${isUp ? 'up' : 'down'}`, isUp ? 'UP' : 'DOWN');
+function statusPill(isUp, reachability = 'legacy') {
+  const pill = el('span', `pill ${isUp ? 'up' : 'down'}`, reachability.replaceAll('_', ' '));
   return pill;
 }
 
@@ -75,6 +76,7 @@ const scanStatus = document.getElementById('scan-status');
 document.getElementById('run-scan-btn').addEventListener('click', async () => {
   if (isScanning) return;
   isScanning = true;
+  const generation = ++scanGeneration;
   document.getElementById('run-scan-btn').disabled = true;
   document.getElementById('stop-scan-btn').disabled = false;
   scanStatus.hidden = false;
@@ -93,6 +95,7 @@ document.getElementById('run-scan-btn').addEventListener('click', async () => {
 
     const result = await window.electronAPI.runScan(config);
 
+    if (generation !== scanGeneration) return;
     if (result.success) {
       displayMirrors(result.mirrors);
       displayVPN(result.vpn_recommendations);
@@ -105,10 +108,12 @@ document.getElementById('run-scan-btn').addEventListener('click', async () => {
       scanStatus.textContent = 'Scan failed';
     }
   } catch (error) {
+    if (generation !== scanGeneration) return;
     showError(error.message);
     scanStatus.classList.remove('live');
-    scanStatus.textContent = 'Scan failed';
+    scanStatus.textContent = error.message.includes('cancelled') ? 'Scan cancelled' : 'Scan failed';
   } finally {
+    if (generation !== scanGeneration) return;
     isScanning = false;
     document.getElementById('run-scan-btn').disabled = false;
     document.getElementById('stop-scan-btn').disabled = true;
@@ -116,15 +121,20 @@ document.getElementById('run-scan-btn').addEventListener('click', async () => {
 });
 
 document.getElementById('stop-scan-btn').addEventListener('click', async () => {
+  const generation = ++scanGeneration;
+  document.getElementById('run-scan-btn').disabled = true;
+  document.getElementById('stop-scan-btn').disabled = true;
+  scanStatus.textContent = 'Stopping scan';
   try {
     await window.electronAPI.stopScan();
-    isScanning = false;
-    document.getElementById('run-scan-btn').disabled = false;
-    document.getElementById('stop-scan-btn').disabled = true;
-    scanStatus.hidden = true;
+    scanStatus.textContent = 'Scan cancelled';
     scanStatus.classList.remove('live');
-  } catch (error) {
-    showError(error.message);
+  } catch (error) { showError(error.message); }
+  finally {
+    if (generation === scanGeneration) {
+      isScanning = false;
+      document.getElementById('run-scan-btn').disabled = false;
+    }
   }
 });
 
@@ -134,15 +144,15 @@ function displayMirrors(mirrors) {
   tbody.replaceChildren();
 
   const sorted = [...mirrors].sort(
-    (a, b) => (a.best_ms || 9999) - (b.best_ms || 9999)
+    (a, b) => (a.is_up && a.best_ms != null ? a.best_ms : Infinity) - (b.is_up && b.best_ms != null ? b.best_ms : Infinity)
   );
 
   sorted.forEach((mirror, index) => {
     const row = el('tr', 'row-enter');
-    row.style.animationDelay = `${index * 28}ms`;
+    row.style.animationDelay = `${Math.min(index, 10) * 20}ms`;
     row.appendChild(el('td', 'mono', mirror.domain));
     const statusTd = el('td');
-    statusTd.appendChild(statusPill(mirror.is_up));
+    statusTd.appendChild(statusPill(mirror.is_up, mirror.reachability));
     row.appendChild(statusTd);
     row.appendChild(el('td', 'mono', mirror.ip_address || '—'));
     row.appendChild(el('td', null, mirror.server_location || '—'));
@@ -196,13 +206,13 @@ function displayVPN(recommendations) {
 function updateDashboard(result) {
   const mirrors = result.mirrors || [];
   const up = mirrors.filter((m) => m.is_up);
-  const latencies = up.map((m) => m.best_ms).filter(Boolean);
+  const latencies = up.map((m) => m.best_ms).filter(value => value != null);
 
   document.getElementById('stat-total').textContent = mirrors.length;
   document.getElementById('stat-online').textContent = up.length;
 
   if (latencies.length > 0) {
-    const fastest = mirrors.find((m) => m.is_up && m.best_ms);
+    const fastest = [...up].filter(m => m.best_ms != null).sort((a, b) => a.best_ms - b.best_ms)[0];
     document.getElementById('stat-fastest').textContent = fastest
       ? formatMs(fastest.best_ms)
       : '—';
@@ -212,6 +222,8 @@ function updateDashboard(result) {
     const spread = [...latencies].sort((a, b) => a - b);
     drawSpark(document.getElementById('stat-spark'), spread);
   } else {
+    document.getElementById('stat-fastest').textContent = '—';
+    document.getElementById('stat-avg').textContent = '—';
     drawSpark(document.getElementById('stat-spark'), []);
   }
 }
@@ -316,3 +328,23 @@ function bindRange(id) {
 }
 bindRange('rounds');
 bindRange('timeout');
+
+// Load canonical configuration and surface runtime prerequisites before enabling scans.
+document.getElementById('run-scan-btn').disabled = true;
+window.electronAPI.getConfig().then(result => {
+  if (!result.success) throw new Error(result.error || 'Configuration could not load');
+  document.getElementById('inventory-count').textContent = `${result.config.mirrors.length} configured destinations · application identity unverified`;
+  document.getElementById('stat-total').textContent = result.config.mirrors.length;
+  for (const [id, key] of [['rounds', 'ping_rounds'], ['timeout', 'timeout_seconds']]) {
+    const value = result.config.settings?.[key];
+    if (value != null) {
+      const input = document.getElementById(id);
+      input.value = value;
+      input.dispatchEvent(new Event('input'));
+    }
+  }
+  document.getElementById('run-scan-btn').disabled = false;
+}).catch(error => {
+  document.getElementById('inventory-count').textContent = 'Python runtime configuration required';
+  showError(error.message, true);
+});

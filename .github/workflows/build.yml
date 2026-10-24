@@ -1,6 +1,10 @@
 name: Build Desktop App
 
 on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
   release:
     types: [created]
   workflow_dispatch:
@@ -11,50 +15,89 @@ permissions:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
-
     runs-on: ${{ matrix.os }}
-
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v7.0.1
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: '22'
-
+          node-version: '22.23.1'
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - name: Install Python runtime dependencies
+        run: |
+          python -m pip install uv==0.12.5
+          uv sync --locked --no-dev
       - name: Install GUI dependencies
-        working-directory: ./gui
-        run: npm ci
-
-      - name: Build GUI (macOS)
+        working-directory: gui
+        run: npm ci --omit=optional --registry=https://registry.npmjs.org
+      - name: Install developer test Electron binary
         if: matrix.os == 'macos-latest'
-        working-directory: ./gui
-        run: npm run build:mac
-
-      - name: Build GUI (Windows)
-        if: matrix.os == 'windows-latest'
-        working-directory: ./gui
-        run: npm run build:win
-
-      - name: Build GUI (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        working-directory: ./gui
-        run: npm run build:linux
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v7
+        working-directory: gui
+        run: node node_modules/electron/install.js
+      - name: Audit all GUI dependencies
+        working-directory: gui
+        run: npm audit --include=dev --include=optional --audit-level=high --registry=https://registry.npmjs.org
+      - name: GUI regression tests
+        working-directory: gui
+        run: npm test
+      - name: Verify packaged application (no publishing)
+        working-directory: gui
+        run: npm run build:check -- --publish never
+      - name: Rendered Electron interaction checks (macOS)
+        if: matrix.os == 'macos-latest'
+        working-directory: gui
+        env:
+          STAKE_E2E_PYTHON: ${{ github.workspace }}/.venv/bin/python
+          STAKE_E2E_OUTPUT: ${{ runner.temp }}
+        run: npm run test:electron
+      - name: Packaged Electron startup and interaction checks (macOS)
+        if: matrix.os == 'macos-latest'
+        working-directory: gui
+        env:
+          STAKE_E2E_PYTHON: ${{ github.workspace }}/.venv/bin/python
+          STAKE_E2E_OUTPUT: ${{ runner.temp }}
+        run: npm run test:electron:packaged
+      - name: Verify unsigned platform installers (no publishing)
+        working-directory: gui
+        run: npm run build -- --publish never
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure() && matrix.os == 'macos-latest'
+        with:
+          name: gui-failure-diagnostics
+          path: ${{ runner.temp }}/stake94-e2e-*/failure.png
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: desktop-app-${{ matrix.os }}
           path: gui/dist/*
-          retention-days: 30
+          retention-days: 14
+          if-no-files-found: error
 
-      - name: Release
-        if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v3
+  release:
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
-          files: gui/dist/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          pattern: desktop-app-*
+          path: artifacts
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          files: |
+            artifacts/**/*.dmg
+            artifacts/**/*.zip
+            artifacts/**/*.exe
+            artifacts/**/*.AppImage
+            artifacts/**/*.deb
+            artifacts/**/*.rpm

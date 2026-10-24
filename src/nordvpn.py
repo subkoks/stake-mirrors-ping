@@ -94,14 +94,18 @@ def find_best_vpn_for_mirror(
     top_n: int = 3,
 ) -> list[VPNRecommendation]:
     """Find the best NordVPN servers for a given mirror based on proximity."""
-    if not result.server_lat or not result.server_lon:
+    if (
+        result.server_lat is None
+        or result.server_lon is None
+        or result.best_latency_ms is None
+    ):
         return []
 
     recommendations = []
     for srv in vpn_servers:
         dist = haversine_km(result.server_lat, result.server_lon, srv.lat, srv.lon)
         vpn_overhead = estimate_vpn_latency(dist, srv.load)
-        mirror_latency = result.best_latency_ms or 999
+        mirror_latency = result.best_latency_ms
         total = round(mirror_latency + vpn_overhead, 2)
 
         recommendations.append(

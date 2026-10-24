@@ -1,0 +1,96 @@
+{
+  "name": "stake-mirrors-ping-gui",
+  "version": "1.0.0",
+  "description": "Desktop GUI for Stake Mirrors Ping",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux",
+    "test": "node --test tests/*.test.js",
+    "build:check": "electron-builder --dir",
+    "test:electron": "node e2e/gui.cjs",
+    "test:electron:packaged": "node e2e/gui.cjs --packaged"
+  },
+  "keywords": [],
+  "author": {
+    "name": "blackterminal",
+    "email": "subkoks@gmail.com"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "43.8.3",
+    "electron-builder": "26.18.0",
+    "playwright": "1.64.1"
+  },
+  "build": {
+    "appId": "com.stakemirrors.ping",
+    "productName": "Stake Mirrors Ping",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "bridge.js",
+      "preload.js",
+      "renderer.js",
+      "index.html",
+      "styles.css",
+      "package.json",
+      "ipc-policy.js",
+      "python-runtime.js"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "minimumSystemVersion": "12.0"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "category": "Utility"
+    },
+    "extraResources": [
+      {
+        "from": "../config.yaml",
+        "to": "config.yaml"
+      },
+      {
+        "from": "../src",
+        "to": "src",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc"
+        ]
+      },
+      {
+        "from": "../requirements.txt",
+        "to": "requirements.txt"
+      }
+    ]
+  },
+  "engines": {
+    "node": ">=22.12.0 <23"
+  },
+  "homepage": "https://github.com/subkoks/stake-mirrors-ping",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/subkoks/stake-mirrors-ping"
+  }
+}

@@ -20,6 +20,10 @@ else:
     from . import OrchestratorConfig, run_scan
 
 
+from src.mirror_update import atomic_write
+from src.mirror_validation import validate_settings
+
+
 def print_json(data: dict) -> None:
     """Print JSON to stdout for Electron to parse."""
     print(json.dumps(data))
@@ -44,6 +48,10 @@ def handle_run_scan(args_json: str) -> None:
                     "domain": r.mirror.domain,
                     "url": r.mirror.url,
                     "is_up": r.is_up,
+                    "reachability": r.reachability,
+                    "application_status": r.application_status,
+                    "http_status": r.http_status,
+                    "error": r.error,
                     "ip_address": r.ip_address,
                     "server_location": r.server_location,
                     "tcp_ms": r.tcp_latency_ms,
@@ -132,7 +140,9 @@ def handle_update_config(args_json: str) -> None:
     # Resolve relative to project root so the GUI (spawned from gui/) writes the
     # correct file. load_config already falls back to the project root for reads.
     project_root = Path(__file__).parent.parent.parent
-    resolved_path = project_root / config_path
+    import os
+
+    resolved_path = Path(os.environ.get("STAKE_DATA_DIR", project_root)) / config_path
 
     # Patch only the allowed scalar settings, preserving comments, key order,
     # and the rest of the file. Rewriting the whole YAML (yaml.dump) would strip
@@ -159,6 +169,18 @@ def _patch_settings_block(path: Path, updates: dict) -> None:
     file is rewritten only if an actual change was made.
     """
     text = path.read_text()
+    import yaml
+
+    settings = (yaml.safe_load(text) or {}).get("settings", {})
+    values = {
+        **settings,
+        **{k: v for k, v in updates.items() if k in ALLOWED_CONFIG_KEYS},
+    }
+    validate_settings(
+        values.get("ping_rounds", 3),
+        values.get("timeout_seconds", 10),
+        values.get("concurrent_limit", 16),
+    )
     lines = text.splitlines()
     out: list[str] = []
     changed = False
@@ -188,7 +210,7 @@ def _patch_settings_block(path: Path, updates: dict) -> None:
         if not matched:
             out.append(line)
     if changed:
-        path.write_text("\n".join(out) + "\n")
+        atomic_write(path, "\n".join(out) + "\n")
 
 
 def _merge_config_update(existing: dict, new_config: dict) -> dict:
@@ -221,7 +243,11 @@ def main() -> None:
     elif command == "get-config":
         handle_get_config()
     elif command == "update-config":
-        handle_update_config(args_json)
+        try:
+            handle_update_config(args_json)
+        except (ValueError, OSError, TypeError) as exc:
+            print_json({"success": False, "error": str(exc)})
+            sys.exit(1)
     else:
         print_json({"success": False, "error": f"Unknown command: {command}"})
         sys.exit(1)
