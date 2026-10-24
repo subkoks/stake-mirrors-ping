@@ -19,3 +19,15 @@ history.db
 !.codex/
 .codex/*
 !.codex/config.toml
+
+# Reproducible GUI installation manifests
+!gui/package.json
+!gui/package-lock.json
+gui/node_modules/
+gui/dist/
+*.egg-info/
+build/
+dist/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/

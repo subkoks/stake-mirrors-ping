@@ -64,8 +64,8 @@ function latCell(ms) {
   return wrap;
 }
 
-function statusPill(isUp) {
-  const pill = el('span', `pill ${isUp ? 'up' : 'down'}`, isUp ? 'UP' : 'DOWN');
+function statusPill(isUp, reachability = 'legacy') {
+  const pill = el('span', `pill ${isUp ? 'up' : 'down'}`, reachability.replaceAll('_', ' '));
   return pill;
 }
 
@@ -107,7 +107,7 @@ document.getElementById('run-scan-btn').addEventListener('click', async () => {
   } catch (error) {
     showError(error.message);
     scanStatus.classList.remove('live');
-    scanStatus.textContent = 'Scan failed';
+    scanStatus.textContent = error.message.includes('cancelled') ? 'Scan cancelled' : 'Scan failed';
   } finally {
     isScanning = false;
     document.getElementById('run-scan-btn').disabled = false;
@@ -134,7 +134,7 @@ function displayMirrors(mirrors) {
   tbody.replaceChildren();
 
   const sorted = [...mirrors].sort(
-    (a, b) => (a.best_ms || 9999) - (b.best_ms || 9999)
+    (a, b) => (a.is_up && a.best_ms != null ? a.best_ms : Infinity) - (b.is_up && b.best_ms != null ? b.best_ms : Infinity)
   );
 
   sorted.forEach((mirror, index) => {
@@ -142,7 +142,7 @@ function displayMirrors(mirrors) {
     row.style.animationDelay = `${index * 28}ms`;
     row.appendChild(el('td', 'mono', mirror.domain));
     const statusTd = el('td');
-    statusTd.appendChild(statusPill(mirror.is_up));
+    statusTd.appendChild(statusPill(mirror.is_up, mirror.reachability));
     row.appendChild(statusTd);
     row.appendChild(el('td', 'mono', mirror.ip_address || '—'));
     row.appendChild(el('td', null, mirror.server_location || '—'));
@@ -196,13 +196,13 @@ function displayVPN(recommendations) {
 function updateDashboard(result) {
   const mirrors = result.mirrors || [];
   const up = mirrors.filter((m) => m.is_up);
-  const latencies = up.map((m) => m.best_ms).filter(Boolean);
+  const latencies = up.map((m) => m.best_ms).filter(value => value != null);
 
   document.getElementById('stat-total').textContent = mirrors.length;
   document.getElementById('stat-online').textContent = up.length;
 
   if (latencies.length > 0) {
-    const fastest = mirrors.find((m) => m.is_up && m.best_ms);
+    const fastest = [...up].filter(m => m.best_ms != null).sort((a, b) => a.best_ms - b.best_ms)[0];
     document.getElementById('stat-fastest').textContent = fastest
       ? formatMs(fastest.best_ms)
       : '—';

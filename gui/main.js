@@ -1,6 +1,8 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
+const fs = require('fs');
+const { createBridge } = require('./bridge');
 
 let mainWindow;
 
@@ -23,7 +25,7 @@ function createWindow() {
       event.preventDefault();
     }
   });
-  mainWindow.webContents.on('new-window', (event) => event.preventDefault());
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
   mainWindow.loadFile('index.html');
 
@@ -50,220 +52,40 @@ app.on('activate', () => {
   }
 });
 
-// Python bridge - spawn Python subprocess for scans
-let pythonProcess = null;
-
-// Resolve the Python interpreter that has the project dependencies installed.
-// The project's deps (aiohttp, curl_cffi, pydantic, ...) live in .venv, not in
-// the system `python3`. Prefer the venv; fall back to `python3`/`python` so the
-// app still launches in dev environments where deps are installed globally.
+// Packaged applications require a Python interpreter with requirements installed.
+const resourceRoot = app.isPackaged ? process.resourcesPath : path.join(__dirname, '..');
 function resolvePythonPath() {
   const candidates = [
-    path.join(__dirname, '..', '.venv', 'bin', 'python'),
-    path.join(__dirname, '..', '.venv', 'Scripts', 'python.exe'), // Windows
+    path.join(resourceRoot, '.venv', 'bin', 'python'),
+    path.join(resourceRoot, '.venv', 'Scripts', 'python.exe'),
     process.platform === 'win32' ? 'python' : 'python3',
   ];
   for (const candidate of candidates) {
-    try {
-      // spawnSync returns null/throws if the binary is missing
-      const { error } = require('child_process').spawnSync(candidate, ['-c', 'pass'], {
-        stdio: 'ignore',
-      });
-      if (!error) return candidate;
-    } catch (e) {
-      // try next candidate
-    }
+    const result = require('child_process').spawnSync(candidate,
+      ['-c', 'import sys; assert sys.version_info >= (3, 12); import aiohttp, certifi, curl_cffi, dotenv, pydantic, yaml, rich'],
+      { stdio: 'ignore', timeout: 10000 });
+    if (!result.error && result.status === 0) return candidate;
   }
-  return process.platform === 'win32' ? 'python' : 'python3';
+  return candidates[candidates.length - 1];
 }
-
-const PYTHON_PATH = resolvePythonPath();
-
-ipcMain.handle('run-scan', async (event, config) => {
-  return new Promise((resolve, reject) => {
-    const pythonPath = PYTHON_PATH;
-    const scriptPath = path.join(__dirname, '..', 'src', 'core', 'api.py');
-
-    pythonProcess = spawn(pythonPath, [scriptPath, 'run-scan', JSON.stringify(config)]);
-
-    let stdout = '';
-    let stderr = '';
-
-    pythonProcess.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
-
-    pythonProcess.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
-
-    pythonProcess.on('close', (code) => {
-      if (code === 0) {
-        try {
-          const result = JSON.parse(stdout);
-          resolve(result);
-        } catch (e) {
-          reject(new Error(`Failed to parse Python output: ${e.message}`));
-        }
-      } else {
-        // The Python bridge prints its structured error JSON to stdout, not
-        // stderr. Surface that message if present, else fall back to stderr.
-        let detail = stderr.trim();
-        try {
-          const parsed = JSON.parse(stdout);
-          if (parsed && parsed.error) detail = parsed.error;
-        } catch (_) {
-          /* stdout was not JSON */
-        }
-        reject(new Error(`Python process exited with code ${code}: ${detail}`));
-      }
-      pythonProcess = null;
-    });
-
-    pythonProcess.on('error', (err) => {
-      reject(new Error(`Failed to spawn Python: ${err.message}`));
-      pythonProcess = null;
-    });
-  });
-});
-
-ipcMain.handle('get-history-stats', async (event, options) => {
-  return new Promise((resolve, reject) => {
-    const pythonPath = PYTHON_PATH;
-    const scriptPath = path.join(__dirname, '..', 'src', 'core', 'api.py');
-
-    const proc = spawn(pythonPath, [scriptPath, 'get-history-stats', JSON.stringify(options || {})]);
-
-    let stdout = '';
-    let stderr = '';
-
-    proc.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
-
-    proc.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
-
-    proc.on('close', (code) => {
-      if (code === 0) {
-        try {
-          const result = JSON.parse(stdout);
-          resolve(result);
-        } catch (e) {
-          reject(new Error(`Failed to parse Python output: ${e.message}`));
-        }
-      } else {
-        let detail = stderr.trim();
-        try {
-          const parsed = JSON.parse(stdout);
-          if (parsed && parsed.error) detail = parsed.error;
-        } catch (_) {
-          /* stdout was not JSON */
-        }
-        reject(new Error(`Python process exited with code ${code}: ${detail}`));
-      }
-    });
-
-    proc.on('error', (err) => {
-      reject(new Error(`Failed to spawn Python: ${err.message}`));
-    });
-  });
-});
-
-ipcMain.handle('get-config', async () => {
-  return new Promise((resolve, reject) => {
-    const pythonPath = PYTHON_PATH;
-    const scriptPath = path.join(__dirname, '..', 'src', 'core', 'api.py');
-
-    const proc = spawn(pythonPath, [scriptPath, 'get-config']);
-
-    let stdout = '';
-    let stderr = '';
-
-    proc.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
-
-    proc.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
-
-    proc.on('close', (code) => {
-      if (code === 0) {
-        try {
-          const result = JSON.parse(stdout);
-          resolve(result);
-        } catch (e) {
-          reject(new Error(`Failed to parse Python output: ${e.message}`));
-        }
-      } else {
-        let detail = stderr.trim();
-        try {
-          const parsed = JSON.parse(stdout);
-          if (parsed && parsed.error) detail = parsed.error;
-        } catch (_) {
-          /* stdout was not JSON */
-        }
-        reject(new Error(`Python process exited with code ${code}: ${detail}`));
-      }
-    });
-
-    proc.on('error', (err) => {
-      reject(new Error(`Failed to spawn Python: ${err.message}`));
-    });
-  });
-});
-
-ipcMain.handle('update-config', async (event, config) => {
-  return new Promise((resolve, reject) => {
-    const pythonPath = PYTHON_PATH;
-    const scriptPath = path.join(__dirname, '..', 'src', 'core', 'api.py');
-
-    const proc = spawn(pythonPath, [scriptPath, 'update-config', JSON.stringify(config)]);
-
-    let stdout = '';
-    let stderr = '';
-
-    proc.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
-
-    proc.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
-
-    proc.on('close', (code) => {
-      if (code === 0) {
-        try {
-          const result = JSON.parse(stdout);
-          resolve(result);
-        } catch (e) {
-          reject(new Error(`Failed to parse Python output: ${e.message}`));
-        }
-      } else {
-        let detail = stderr.trim();
-        try {
-          const parsed = JSON.parse(stdout);
-          if (parsed && parsed.error) detail = parsed.error;
-        } catch (_) {
-          /* stdout was not JSON */
-        }
-        reject(new Error(`Python process exited with code ${code}: ${detail}`));
-      }
-    });
-
-    proc.on('error', (err) => {
-      reject(new Error(`Failed to spawn Python: ${err.message}`));
-    });
-  });
-});
-
-ipcMain.handle('stop-scan', async () => {
-  if (pythonProcess) {
-    pythonProcess.kill();
-    pythonProcess = null;
-    return { success: true };
+let bridge;
+function getBridge() {
+  if (bridge) return bridge;
+  const dataRoot = app.isPackaged ? app.getPath('userData') : resourceRoot;
+  if (app.isPackaged) {
+    fs.mkdirSync(dataRoot, { recursive: true });
+    const config = path.join(dataRoot, 'config.yaml');
+    if (!fs.existsSync(config)) fs.copyFileSync(path.join(resourceRoot, 'config.yaml'), config);
   }
-  return { success: false, message: 'No scan running' };
-});
+  bridge = createBridge(spawn, resolvePythonPath(), path.join(resourceRoot, 'src', 'core', 'api.py'), {
+    cwd: dataRoot,
+    env: { ...process.env, STAKE_DATA_DIR: dataRoot },
+  });
+  return bridge;
+}
+ipcMain.handle('run-scan', (event, config) => getBridge().request('run-scan', config, true));
+ipcMain.handle('get-history-stats', (event, options) => getBridge().request('get-history-stats', options));
+ipcMain.handle('get-config', () => getBridge().request('get-config'));
+ipcMain.handle('update-config', (event, config) => getBridge().request('update-config', config));
+ipcMain.handle('stop-scan', () => getBridge().stop());
+app.on('before-quit', () => { if (bridge) bridge.stop().catch(() => {}); });

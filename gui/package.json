@@ -1,0 +1,79 @@
+{
+  "name": "stake-mirrors-ping-gui",
+  "version": "1.0.0",
+  "description": "Desktop GUI for Stake Mirrors Ping",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux",
+    "test": "node --test tests/*.test.js",
+    "build:check": "electron-builder --dir"
+  },
+  "keywords": [],
+  "author": "blackterminal",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.stakemirrors.ping",
+    "productName": "Stake Mirrors Ping",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "bridge.js",
+      "preload.js",
+      "renderer.js",
+      "index.html",
+      "styles.css",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "category": "Utility"
+    },
+    "extraResources": [
+      {
+        "from": "../config.yaml",
+        "to": "config.yaml"
+      },
+      {
+        "from": "../src",
+        "to": "src",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc"
+        ]
+      },
+      {
+        "from": "../requirements.txt",
+        "to": "requirements.txt"
+      }
+    ]
+  }
+}
