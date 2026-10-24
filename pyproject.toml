@@ -111,4 +111,4 @@ include = ["src", "src.*"]
 [[tool.uv.index]]
 name = "pypi"
 url = "https://pypi.org/simple"
-default = true
+default = false
