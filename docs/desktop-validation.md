@@ -1,6 +1,6 @@
 # Desktop candidate validation
 
-Candidate: 2.1.0. This is engineering evidence, not a published release or signing claim.
+Release: [2.1.0](https://github.com/subkoks/stake-mirrors-ping/releases/tag/v2.1.0), published 2026-10-25. This is engineering evidence, not a signing claim.
 
 ## Local Intel macOS
 
@@ -20,4 +20,4 @@ Windows Server CI is not manual Windows 10/11 verification. Modern Mac runner la
 
 ## External gates
 
-No new release/tag is published. Public release requires final candidate approval. macOS Developer ID/notarization and Windows publisher signing are not verified without separately authorized credentials. An unsigned engineering candidate must not be advertised as a frictionless public install on every OS.
+The user approved publication of the unsigned candidate. Tag `v2.1.0` points to `a586f4f6d5e94511ff5d5951da25905fbfbf2688`; [exact-source main validation](https://github.com/subkoks/stake-mirrors-ping/actions/runs/40143769216) passed all four target jobs and final nine-file candidate assembly. The release contains those nine binaries/archives and two metadata files; uploaded asset sizes/digests were checked against the manifest/checksums before publication. Draft preparation uploaded correctly but its final tag-endpoint lookup returned HTTP 404 for a draft; publication followed a separate draft-aware verification. The helper now uses that draft-aware lookup with regression coverage. macOS Developer ID/notarization and Windows publisher signing are not verified without separately authorized credentials. An unsigned engineering candidate must not be advertised as a frictionless public install on every OS.

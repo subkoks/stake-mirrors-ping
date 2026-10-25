@@ -61,3 +61,34 @@ def test_candidate_accepts_native_linux_package_names(tmp_path, monkeypatch):
 
     with pytest.raises(SystemExit, match="Unexpected release inventory"):
         verify_desktop_artifacts.main()
+
+
+def test_draft_verification_uses_draft_aware_lookup(monkeypatch):
+    import json
+
+    import pytest
+
+    from scripts import prepare_release_draft
+
+    release = {"isDraft": True, "tagName": "v2.1.0", "assets": [{"name": "setup.exe"}]}
+    calls = []
+
+    def fake_output(*args):
+        calls.append(args)
+        return json.dumps(release)
+
+    monkeypatch.setattr(prepare_release_draft, "output", fake_output)
+    prepare_release_draft.verify_draft("v2.1.0", {"setup.exe"})
+    assert calls[0][:4] == ("gh", "release", "view", "v2.1.0")
+    for changed in (
+        {"isDraft": False},
+        {"tagName": "v9.9.9"},
+        {"assets": [{"name": "unexpected.exe"}]},
+        {"assets": [{"name": "setup.exe"}, {"name": "setup.exe"}]},
+    ):
+        original = release.copy()
+        release.update(changed)
+        with pytest.raises(SystemExit, match="Draft asset verification failed"):
+            prepare_release_draft.verify_draft("v2.1.0", {"setup.exe"})
+        release.clear()
+        release.update(original)
