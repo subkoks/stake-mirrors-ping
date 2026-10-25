@@ -19,6 +19,23 @@ def output(*args: str) -> str:
     return subprocess.check_output(list(args), text=True).strip()
 
 
+def verify_draft(tag: str, expected: set[str]) -> None:
+    # GitHub's /releases/tags endpoint excludes drafts. gh release view resolves
+    # them through the authenticated release listing instead.
+    release = json.loads(
+        output(
+            "gh", "release", "view", tag, "-R", REPO, "--json", "isDraft,tagName,assets"
+        )
+    )
+    if (
+        not release["isDraft"]
+        or release["tagName"] != tag
+        or {a["name"] for a in release["assets"]} != expected
+        or len(release["assets"]) != len(expected)
+    ):
+        raise SystemExit("Draft asset verification failed; leave draft unpublished")
+
+
 def main() -> None:
     tag, run_id = os.environ["RELEASE_TAG"], os.environ["BUILD_RUN_ID"]
     if not re.fullmatch(r"v\d+\.\d+\.\d+", tag) or not re.fullmatch(r"\d+", run_id):
@@ -101,9 +118,7 @@ def main() -> None:
             ],
             check=True,
         )
-        release = json.loads(output("gh", "api", f"repos/{REPO}/releases/tags/{tag}"))
-        if not release["draft"] or {a["name"] for a in release["assets"]} != expected:
-            raise SystemExit("Draft asset verification failed; leave draft unpublished")
+        verify_draft(tag, expected)
         print(
             "Draft prepared and assets verified. No tag created and no release published."
         )

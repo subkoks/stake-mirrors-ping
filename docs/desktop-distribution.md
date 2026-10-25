@@ -1,6 +1,6 @@
 # Self-contained desktop distribution
 
-Status: **2.1.0 candidate; not published**. v2.0.0 remains unchanged and requires external Python. This document describes the new architecture and its acceptance gates, not evidence that every gate has passed.
+Status: **[2.1.0 published](https://github.com/subkoks/stake-mirrors-ping/releases/tag/v2.1.0)**, unsigned and not notarized. v2.0.0 remains unchanged and requires external Python. This document describes the architecture and acceptance boundaries; see [validation evidence](desktop-validation.md) for checks actually executed.
 
 ## Runtime and provenance
 
