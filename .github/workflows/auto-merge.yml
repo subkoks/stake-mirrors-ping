@@ -1,6 +1,10 @@
 name: auto-merge
 
 # Run trusted default-branch automation after CI. Never check out PR code.
+# Explicit opt-in: owner adds automerge-approved and the PR body marker
+# Automerge-approved-head: <full current head SHA>. New commits invalidate it.
+# Removing the label stops future enable requests; cancel already-armed auto-merge
+# manually in GitHub. Required checks/reviews still apply.
 # GitHub auto-merge still waits for all required checks and branch protections.
 on:
   workflow_run:
@@ -38,7 +42,9 @@ jobs:
             if jq -e --arg repo "$GH_REPO" --arg sha "$TESTED_SHA" \
               '.state == "open" and .draft == false and
                .head.repo.full_name == $repo and .base.repo.full_name == $repo and
-               .base.ref == "main" and .head.sha == $sha' <<< "$pr" >/dev/null; then
+               .base.ref == "main" and .head.sha == $sha and
+               any(.labels[]; .name == "automerge-approved") and
+               ((.body // "") | contains("Automerge-approved-head: " + $sha))' <<< "$pr" >/dev/null; then
               gh pr merge "$number" --repo "$GH_REPO" --auto --squash \
                 --match-head-commit "$TESTED_SHA"
             fi
